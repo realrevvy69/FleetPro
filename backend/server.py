@@ -44,6 +44,7 @@ class Vehicle(BaseModel):
     license_plate: str
     status: VehicleStatus = "parked"
     mileage: int = 0
+    extras: List[str] = []
     created_at: str = Field(default_factory=now_iso)
 
 
@@ -53,6 +54,7 @@ class VehicleCreate(BaseModel):
     license_plate: str
     status: VehicleStatus = "parked"
     mileage: int = 0
+    extras: List[str] = []
 
 
 class VehicleUpdate(BaseModel):
@@ -61,6 +63,7 @@ class VehicleUpdate(BaseModel):
     license_plate: Optional[str] = None
     status: Optional[VehicleStatus] = None
     mileage: Optional[int] = None
+    extras: Optional[List[str]] = None
 
 
 class Damage(BaseModel):

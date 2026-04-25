@@ -20,8 +20,6 @@ import { SignaturePad } from "../components/SignaturePad";
 import { formatDate, formatNumber } from "../lib/format";
 import { downloadCSV, generateProtocolPDF } from "../lib/exports";
 
-const DEFAULT_EXTRAS = ["Medkit", "Warning Triangle", "Hi-Vis Vest", "Spare Tire", "Jack"];
-
 export const ProtocolsTab = ({ vehicles, drivers, onChange }) => {
   const { t } = useTranslation();
   const [protocols, setProtocols] = useState([]);
@@ -59,7 +57,7 @@ const initialForm = () => ({
   driver_name: "",
   fuel_level: 50,
   mileage: "",
-  extras: DEFAULT_EXTRAS.map((n) => ({ name: n, present: true })),
+  extras: [],
   newExtra: "",
   signature_base64: "",
 });
@@ -72,7 +70,15 @@ const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
   useEffect(() => {
     if (form.vehicle_id) {
       const v = vehicles.find((x) => x.id === form.vehicle_id);
-      if (v && form.mileage === "") setForm((f) => ({ ...f, mileage: v.mileage }));
+      if (v) {
+        setForm((f) => ({
+          ...f,
+          mileage: f.mileage === "" ? v.mileage : f.mileage,
+          extras: (v.extras || []).map((name) => ({ name, present: true })),
+        }));
+      }
+    } else {
+      setForm((f) => ({ ...f, extras: [] }));
     }
     // eslint-disable-next-line
   }, [form.vehicle_id]);

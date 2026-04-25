@@ -13,8 +13,6 @@ import { SignaturePad } from "../components/SignaturePad";
 import { Toaster } from "../components/ui/sonner";
 import { Car, Check, Fuel, Plus, X } from "lucide-react";
 
-const DEFAULT_EXTRAS = ["Medkit", "Warning Triangle", "Hi-Vis Vest", "Spare Tire", "Jack"];
-
 export default function MobileHandoverPage() {
   const { t } = useTranslation();
   const { vehicleId } = useParams();
@@ -24,7 +22,7 @@ export default function MobileHandoverPage() {
   const [done, setDone] = useState(false);
   const [form, setForm] = useState({
     driver_name: "", fuel_level: 50, mileage: "",
-    extras: DEFAULT_EXTRAS.map((n) => ({ name: n, present: true })),
+    extras: [],
     newExtra: "", signature_base64: "",
   });
 
@@ -33,7 +31,11 @@ export default function MobileHandoverPage() {
       try {
         const r = await api.get(`/public/vehicles/${vehicleId}`);
         setVehicle(r.data);
-        setForm((f) => ({ ...f, mileage: r.data.mileage }));
+        setForm((f) => ({
+          ...f,
+          mileage: r.data.mileage,
+          extras: (r.data.extras || []).map((name) => ({ name, present: true })),
+        }));
       } catch { toast.error(t("mobile.not_found")); }
       finally { setLoading(false); }
     })();

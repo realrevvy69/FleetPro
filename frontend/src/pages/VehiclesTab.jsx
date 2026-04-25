@@ -16,6 +16,7 @@ import { Textarea } from "../components/ui/textarea";
 import { StatusBadge } from "../components/StatusBadge";
 import { PhotoCapture } from "../components/PhotoCapture";
 import { VehicleQRModal } from "../components/VehicleQRModal";
+import { ExtrasEditor } from "../components/ExtrasEditor";
 import { api, API } from "../lib/api";
 import { toast } from "sonner";
 import { Plus, Trash2, AlertTriangle, Car as CarIcon, ImageIcon, QrCode, Download } from "lucide-react";
@@ -23,7 +24,7 @@ import { formatNumber, formatDate } from "../lib/format";
 import { downloadCSV } from "../lib/exports";
 
 const STATUS_OPTIONS = ["parked", "on_road", "damaged", "maintenance"];
-const emptyVehicle = { brand: "", model: "", license_plate: "", status: "parked", mileage: 0 };
+const emptyVehicle = { brand: "", model: "", license_plate: "", status: "parked", mileage: 0, extras: [] };
 
 export const VehiclesTab = ({ vehicles, onChange }) => {
   const { t } = useTranslation();
@@ -126,6 +127,13 @@ const VehicleList = ({ vehicles, onChange }) => {
                   </Field>
                   <Field label={t("vehicles.mileage")}><Input data-testid="vehicle-mileage-input" type="number" value={form.mileage} onChange={(e) => setForm({ ...form, mileage: e.target.value })} className="bg-[#0A0A0A] border-white/10 font-mono" /></Field>
                 </div>
+                <Field label={t("vehicles.extras_template")}>
+                  <ExtrasEditor
+                    value={form.extras || []}
+                    onChange={(extras) => setForm({ ...form, extras })}
+                    testId="vehicle-extras-editor"
+                  />
+                </Field>
               </div>
               <DialogFooter>
                 <Button onClick={submit} data-testid="vehicle-submit-btn" className="bg-blue-600 hover:bg-blue-700 text-white">
