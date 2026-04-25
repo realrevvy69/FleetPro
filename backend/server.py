@@ -423,6 +423,32 @@ async def create_return(payload: ReturnCreate):
     return rp
 
 
+@api_router.delete("/protocols/{protocol_id}")
+async def delete_protocol(protocol_id: str):
+    p = await db.protocols.find_one({"id": protocol_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Protocol not found")
+    # If it's a handover with a return, delete both
+    if p.get("type") == "handover":
+        if p.get("return_protocol_id"):
+            await db.protocols.delete_one({"id": p["return_protocol_id"]})
+        await db.protocols.delete_one({"id": protocol_id})
+        # If the vehicle is still on the road because of this handover, set back to parked
+        if not p.get("returned"):
+            await db.vehicles.update_one(
+                {"id": p["vehicle_id"], "status": "on_road"},
+                {"$set": {"status": "parked"}},
+            )
+    else:
+        # return protocol — also unset reference on parent handover
+        await db.protocols.delete_one({"id": protocol_id})
+        await db.protocols.update_one(
+            {"return_protocol_id": protocol_id},
+            {"$set": {"returned": False, "return_protocol_id": None}},
+        )
+    return {"ok": True}
+
+
 @api_router.get("/")
 async def root():
     return {"app": "FleetPro", "status": "ok"}
