@@ -1,0 +1,89 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 2 (The Performance Pro) - Customized for Dark Mode Fleet Command Center",
+  "colors": {
+    "background": "#0A0A0A",
+    "surface": "#141414",
+    "surface_hover": "#1F1F1F",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "primary": "#2563EB",
+    "primary_hover": "#1D4ED8",
+    "text_main": "#FFFFFF",
+    "text_muted": "#A1A1AA",
+    "status": {
+      "success": "#22C55E",
+      "warning": "#F59E0B",
+      "danger": "#EF4444",
+      "info": "#3B82F6"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Outfit, sans-serif",
+      "body": "Inter, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl tracking-tight font-bold text-white",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-semibold text-white",
+      "h3": "text-xl font-medium text-white",
+      "body": "text-base text-zinc-400 leading-relaxed",
+      "label": "text-xs uppercase tracking-[0.2em] text-zinc-500",
+      "data_value": "font-mono text-lg font-medium text-white"
+    }
+  },
+  "layout_and_spacing": {
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6",
+    "bento_grid": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4",
+    "container_padding": "p-6 md:p-8",
+    "surface_style": "bg-[#141414] border border-white/10 rounded-lg",
+    "alignment": "Left-align forms, dense data, and tabular content. Ensure optical alignment."
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2 transition-all font-medium border border-blue-500/50 shadow-[0_0_15px_rgba(37,99,235,0.2)]",
+      "secondary": "bg-[#1A1A1A] hover:bg-[#252525] text-white border border-white/10 rounded-md px-4 py-2 transition-all",
+      "ghost": "hover:bg-white/5 text-zinc-300 hover:text-white rounded-md px-4 py-2 transition-all"
+    },
+    "tabs": "Use Shadcn Tabs. Inactive text-zinc-500, Active text-white with border-b-2 border-blue-600. Avoid pill-shaped tabs; stick to technical underline styles.",
+    "cards": "Go flat and rectangular. Use `border-white/10` with `#141414` background. Do not use soft shadows; use 1px solid strokes or inner glows.",
+    "inputs": "Shadcn components customized: bg-[#0A0A0A] border-white/10 text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 rounded-md.",
+    "badges": "Technical look. Example for 'On the Road': bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-sm px-2 py-0.5 text-xs font-mono."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Interactive cards: translate-y-[-2px] with border-white/30 and subtle drop shadow.",
+    "transitions": "transition-all duration-200 ease-in-out",
+    "forms": "Inputs and dropdowns should have a distinct focus state (blue ring) to maintain accessibility."
+  },
+  "icons": "lucide-react",
+  "media": {
+    "dashboard_header_bg": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/d80d608b-0ce3-48b3-9196-63f3e701a6a4/images/fbfbaa7b103d70c0f2c81495075a060d6f2080a9e4c4b918e5496994ed0bba5b.png",
+      "description": "Sleek abstract dark technology background with subtle blue glowing accents. Use in the dashboard header or hero section."
+    },
+    "car_damage_sample": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/d80d608b-0ce3-48b3-9196-63f3e701a6a4/images/8de5895cef4f5ae1d8a22d1ebdac7c2a0a2e9ee83e638792c808293217fa795e.png",
+      "description": "Sample image of a damaged car fender, to be used in the Damage view/upload component."
+    },
+    "fleet_cars": {
+      "url": "https://images.unsplash.com/photo-1688054005456-466170816196?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBibGFjayUyMGZsZWV0JTIwY2Fyc3xlbnwwfHx8fDE3NzcxNDA1NzZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "A row of parked cars in a garage, suitable for the 'Vehicles' tab header or empty state background."
+    }
+  },
+  "accessibility_and_testing": {
+    "contrast": "Ensure text contrast meets APCA/WCAG standards. Use zinc-400 for secondary text to maintain readability on dark backgrounds.",
+    "testing_attributes": "All interactive and key informational elements MUST include a `data-testid` attribute (e.g., `data-testid=\"vehicle-tab\"`, `data-testid=\"submit-handover-button\"`)."
+  },
+  "instructions_to_main_agent": [
+    "NOTE: The project uses JavaScript (.js, .jsx), NOT TypeScript (.tsx). Generate all components as .jsx/.js files.",
+    "Enforce dark mode globally: the UI must have a black background (#0A0A0A), white text (#FFFFFF), and blue accents (#2563EB) per user request.",
+    "Use Shadcn UI components extensively (Tabs, Cards, Table, Dialog/Modal, Select, Checkbox). Customize them to remove Vercel defaults and match the 'Performance Pro' technical dark mode aesthetic.",
+    "Dashboard Page: Display 4 key metric cards (Total Vehicles, On the Road, Damaged, Needs Maintenance) using a 4-column grid (`grid-cols-4`).",
+    "Tabs Layout: Implement 'Vehicles', 'Maintenance', and 'Protocols' tabs.",
+    "Vehicles Tab: Create a CRUD interface (Data Table) with columns: Brand, Model, License Plate (use monospace font), Status, Mileage.",
+    "Damages Section: Provide a view to upload/take pictures of damage (use `car_damage_sample` image as placeholder/preview), link to a vehicle, and a checkbox for 'Tolerated' vs 'Not Tolerated' damage.",
+    "Maintenance Tab: UI for scheduling recurring maintenance by mileage or month, clearing notifications, and a history log.",
+    "Protocols Tab - Handover: Implement a form with a vehicle dropdown, fuel level slider/input, extras checklist (medkit, etc.), mileage input, name, and a signature pad (use `react-signature-canvas` or similar). Submitting this must change the vehicle status to 'On the Road'.",
+    "Protocols Tab - History: Show a list of handover protocols. Provide a way to handle 'Return'. Returning a vehicle marks the protocol row in green and changes the vehicle status to 'Parked'."
+  ]
+}
