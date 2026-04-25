@@ -139,6 +139,12 @@
   "protocols": {
     "tab_handover": "Übergabeprotokoll",
     "tab_history": "Verlauf",
+    "search_placeholder": "Suche nach Kennzeichen, Modell oder Marke…",
+    "no_match": "Keine Protokolle gefunden.",
+    "pdf_lang_title": "PDF-Sprache",
+    "pdf_lang_description": "In welcher Sprache soll das Protokoll-PDF erstellt werden?",
+    "pdf_lang_en": "Englisch",
+    "pdf_lang_de": "Deutsch",
     "new_handover": "Neue Übergabe",
     "subtitle": "Übergeben Sie das Fahrzeug an einen Fahrer.",
     "vehicle": "Fahrzeug",

@@ -139,6 +139,12 @@
   "protocols": {
     "tab_handover": "Handover Protocol",
     "tab_history": "History",
+    "search_placeholder": "Search by license plate, model or brand…",
+    "no_match": "No protocols match your search.",
+    "pdf_lang_title": "PDF Language",
+    "pdf_lang_description": "In which language should the protocol PDF be generated?",
+    "pdf_lang_en": "English",
+    "pdf_lang_de": "German",
     "new_handover": "New Handover",
     "subtitle": "Hand over the vehicle to a driver.",
     "vehicle": "Vehicle",

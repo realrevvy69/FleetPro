@@ -15,7 +15,7 @@ import { Checkbox } from "../components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { api, API } from "../lib/api";
 import { toast } from "sonner";
-import { ClipboardSignature, History as HistoryIcon, Plus, X, Fuel, Check, RotateCcw, Download, FileText } from "lucide-react";
+import { ClipboardSignature, History as HistoryIcon, Plus, X, Fuel, Check, RotateCcw, Download, FileText, Search } from "lucide-react";
 import { SignaturePad } from "../components/SignaturePad";
 import { formatDate, formatNumber } from "../lib/format";
 import { downloadCSV, generateProtocolPDF } from "../lib/exports";
@@ -227,7 +227,24 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
   const [returning, setReturning] = useState(null);
   const [retForm, setRetForm] = useState({ driver_name: "", fuel_level: 50, mileage: "", extras: [], signature_base64: "" });
   const [viewing, setViewing] = useState(null);
+  const [search, setSearch] = useState("");
+  const [pdfChoice, setPdfChoice] = useState(null); // protocol pending PDF lang choice
   const vMap = Object.fromEntries(vehicles.map((v) => [v.id, v]));
+
+  const filtered = (() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return protocols;
+    return protocols.filter((p) => {
+      const v = vMap[p.vehicle_id];
+      if (!v) return false;
+      return (
+        v.license_plate.toLowerCase().includes(q) ||
+        v.brand.toLowerCase().includes(q) ||
+        v.model.toLowerCase().includes(q) ||
+        (p.driver_name || "").toLowerCase().includes(q)
+      );
+    });
+  })();
 
   const openReturn = (p) => {
     setReturning(p);
@@ -265,17 +282,27 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
     return { ...f, extras: arr };
   });
 
-  const downloadPDF = async (p) => {
+  const downloadPDF = async (p, lang) => {
     let returnP = null;
     if (p.return_protocol_id) {
       try { returnP = (await api.get(`/protocols/${p.return_protocol_id}`)).data; } catch {}
     }
-    generateProtocolPDF(p, returnP, vMap[p.vehicle_id]);
+    generateProtocolPDF(p, returnP, vMap[p.vehicle_id], lang);
   };
 
   return (
     <div data-testid="protocol-history" className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[260px] max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Input
+            data-testid="protocol-search-input"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("protocols.search_placeholder")}
+            className="bg-[#0A0A0A] border-white/10 pl-9"
+          />
+        </div>
         <Button
           variant="secondary"
           onClick={() => downloadCSV(API, "/exports/protocols.csv", "protocols.csv")}
@@ -289,7 +316,11 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
         <div className="border border-dashed border-white/10 rounded-lg p-12 text-center text-zinc-500 text-sm">
           {t("protocols.history_empty")}
         </div>
-      ) : protocols.map((p) => {
+      ) : filtered.length === 0 ? (
+        <div className="border border-dashed border-white/10 rounded-lg p-12 text-center text-zinc-500 text-sm" data-testid="protocol-no-match">
+          {t("protocols.no_match")}
+        </div>
+      ) : filtered.map((p) => {
         const v = vMap[p.vehicle_id];
         const isReturned = p.returned;
         return (
@@ -314,7 +345,7 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
                   <div className="font-mono text-zinc-300">{formatNumber(p.mileage)} km · {p.fuel_level}% {t("protocols.fuel")}</div>
                   {isReturned && <div className="text-emerald-400 mt-0.5 font-mono uppercase tracking-wider">{t("protocols.returned_badge")}</div>}
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => downloadPDF(p)} data-testid={`pdf-protocol-${p.id}`} className="text-zinc-400 hover:text-blue-400">
+                <Button size="sm" variant="ghost" onClick={() => setPdfChoice(p)} data-testid={`pdf-protocol-${p.id}`} className="text-zinc-400 hover:text-blue-400">
                   <FileText className="w-3.5 h-3.5 mr-1.5" /> {t("protocols.download_pdf")}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setViewing(p)} data-testid={`view-protocol-${p.id}`} className="text-zinc-400 hover:text-white">{t("common.view")}</Button>
@@ -361,6 +392,33 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
           <DialogFooter>
             <Button onClick={submitReturn} data-testid="return-submit-btn" className="bg-blue-600 hover:bg-blue-700 text-white">{t("protocols.complete_return")}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pdfChoice} onOpenChange={(o) => !o && setPdfChoice(null)}>
+        <DialogContent className="bg-[#141414] border-white/10 text-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-heading">{t("protocols.pdf_lang_title")}</DialogTitle>
+            <DialogDescription className="text-zinc-500">{t("protocols.pdf_lang_description")}</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-2">
+            <Button
+              data-testid="pdf-lang-en-btn"
+              onClick={() => { downloadPDF(pdfChoice, "en"); setPdfChoice(null); }}
+              className="bg-[#1A1A1A] hover:bg-blue-600 hover:text-white border border-white/10 text-white h-20 flex flex-col items-center justify-center gap-1"
+            >
+              <span className="text-2xl">🇬🇧</span>
+              <span className="text-sm">{t("protocols.pdf_lang_en")}</span>
+            </Button>
+            <Button
+              data-testid="pdf-lang-de-btn"
+              onClick={() => { downloadPDF(pdfChoice, "de"); setPdfChoice(null); }}
+              className="bg-[#1A1A1A] hover:bg-blue-600 hover:text-white border border-white/10 text-white h-20 flex flex-col items-center justify-center gap-1"
+            >
+              <span className="text-2xl">🇩🇪</span>
+              <span className="text-sm">{t("protocols.pdf_lang_de")}</span>
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

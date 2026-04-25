@@ -98,9 +98,11 @@ export const DriversTab = ({ onChange }) => {
                 </div>
               </div>
               {d.phone && (<div className="mt-4 text-xs text-zinc-400 flex items-center gap-1.5 font-mono"><Phone className="w-3 h-3" /> {d.phone}</div>)}
-              <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+              <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-end gap-2">
                 <Button size="sm" variant="ghost" onClick={() => openEdit(d)} data-testid={`driver-edit-${d.id}`} className="text-zinc-400 hover:text-white h-7">{t("common.edit")}</Button>
-                <Button size="sm" variant="ghost" onClick={() => remove(d.id)} data-testid={`driver-delete-${d.id}`} className="text-zinc-500 hover:text-red-400 h-7 px-2"><Trash2 className="w-3.5 h-3.5" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => remove(d.id)} data-testid={`driver-delete-${d.id}`} className="text-zinc-400 hover:text-red-400 hover:bg-red-500/10 h-7 px-2" title={t("common.delete")}>
+                  <Trash2 className="w-3.5 h-3.5 mr-1" /> {t("common.delete")}
+                </Button>
               </div>
             </Card>
           ))}
