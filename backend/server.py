@@ -206,6 +206,7 @@ async def delete_vehicle(vehicle_id: str):
     # cleanup related
     await db.damages.delete_many({"vehicle_id": vehicle_id})
     await db.maintenance_schedules.delete_many({"vehicle_id": vehicle_id})
+    await db.protocols.delete_many({"vehicle_id": vehicle_id})
     return {"ok": True}
 
 
