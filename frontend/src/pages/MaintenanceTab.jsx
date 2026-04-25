@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -15,7 +16,22 @@ import { toast } from "sonner";
 import { Plus, Wrench, Check, History as HistoryIcon, Trash2 } from "lucide-react";
 import { formatDate, formatNumber } from "../lib/format";
 
+// Localize alert detail strings produced by the backend
+const localizeDetail = (t, detail) => {
+  if (!detail) return detail;
+  let m = detail.match(/^(-?\d+) km remaining$/);
+  if (m) return t("maintenance.km_remaining", { count: Number(m[1]) });
+  m = detail.match(/^Overdue by (\d+) km$/);
+  if (m) return t("maintenance.km_overdue", { count: Number(m[1]) });
+  m = detail.match(/^(-?\d+) months remaining$/);
+  if (m) return t("maintenance.months_remaining", { count: Number(m[1]) });
+  m = detail.match(/^Overdue by (\d+) months$/);
+  if (m) return t("maintenance.months_overdue", { count: Number(m[1]) });
+  return detail;
+};
+
 export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
+  const { t } = useTranslation();
   const [schedules, setSchedules] = useState([]);
   const [history, setHistory] = useState([]);
   const [open, setOpen] = useState(false);
@@ -29,17 +45,12 @@ export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
       const [s, h] = await Promise.all([api.get("/maintenance/schedules"), api.get("/maintenance/history")]);
       setSchedules(s.data);
       setHistory(h.data);
-    } catch {
-      toast.error("Failed to load maintenance");
-    }
+    } catch { toast.error(t("common.failed")); }
   };
   useEffect(() => { load(); }, []);
 
   const submitSchedule = async () => {
-    if (!form.vehicle_id || !form.name || !form.interval_value) {
-      toast.error("All fields required");
-      return;
-    }
+    if (!form.vehicle_id || !form.name || !form.interval_value) return toast.error(t("maintenance.all_required"));
     try {
       await api.post("/maintenance/schedules", {
         vehicle_id: form.vehicle_id,
@@ -47,18 +58,16 @@ export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
         type: form.type,
         interval_value: Number(form.interval_value),
       });
-      toast.success("Schedule created");
+      toast.success(t("maintenance.schedule_created"));
       setOpen(false);
       setForm({ vehicle_id: "", name: "", type: "mileage", interval_value: "" });
       load();
       onChange();
-    } catch {
-      toast.error("Failed to create schedule");
-    }
+    } catch { toast.error(t("common.failed")); }
   };
 
   const removeSchedule = async (id) => {
-    if (!window.confirm("Delete this schedule?")) return;
+    if (!window.confirm(t("maintenance.delete_schedule_confirm"))) return;
     await api.delete(`/maintenance/schedules/${id}`);
     load();
     onChange();
@@ -78,77 +87,65 @@ export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
         mileage_at_completion: Number(completionMileage) || null,
         notes: completionNotes || null,
       });
-      toast.success("Maintenance recorded");
+      toast.success(t("maintenance.recorded"));
       setCompleting(null);
       load();
       onChange();
-    } catch {
-      toast.error("Failed to record");
-    }
+    } catch { toast.error(t("common.failed")); }
   };
 
   const vLabel = (id) => {
     const v = vehicles.find((x) => x.id === id);
-    return v ? `${v.brand} ${v.model} · ${v.license_plate}` : "Unknown";
+    return v ? `${v.brand} ${v.model} · ${v.license_plate}` : t("common.unknown");
   };
 
   return (
     <div data-testid="maintenance-page" className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="font-heading text-2xl font-semibold">Maintenance</h2>
-          <p className="text-sm text-zinc-500 mt-1">Schedule recurring services and clear notifications.</p>
+          <h2 className="font-heading text-2xl font-semibold">{t("maintenance.title")}</h2>
+          <p className="text-sm text-zinc-500 mt-1">{t("maintenance.subtitle")}</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button data-testid="add-schedule-btn" className="bg-blue-600 hover:bg-blue-700 text-white blue-glow border border-blue-500/50">
-              <Plus className="w-4 h-4 mr-2" /> New Schedule
+              <Plus className="w-4 h-4 mr-2" /> {t("maintenance.new")}
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-[#141414] border-white/10 text-white">
             <DialogHeader>
-              <DialogTitle className="font-heading">New Maintenance Schedule</DialogTitle>
-              <DialogDescription className="text-zinc-500">
-                Recurring by mileage or by month.
-              </DialogDescription>
+              <DialogTitle className="font-heading">{t("maintenance.dialogTitle")}</DialogTitle>
+              <DialogDescription className="text-zinc-500">{t("maintenance.dialogDescription")}</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4">
-              <FieldLbl label="Vehicle">
+              <Field label={t("maintenance.vehicle")}>
                 <Select value={form.vehicle_id} onValueChange={(v) => setForm({ ...form, vehicle_id: v })}>
-                  <SelectTrigger data-testid="schedule-vehicle-select" className="bg-[#0A0A0A] border-white/10">
-                    <SelectValue placeholder="Select vehicle" />
-                  </SelectTrigger>
+                  <SelectTrigger data-testid="schedule-vehicle-select" className="bg-[#0A0A0A] border-white/10"><SelectValue placeholder={t("maintenance.selectVehicle")} /></SelectTrigger>
                   <SelectContent className="bg-[#141414] border-white/10 text-white">
-                    {vehicles.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>{v.brand} {v.model} · {v.license_plate}</SelectItem>
-                    ))}
+                    {vehicles.map((v) => (<SelectItem key={v.id} value={v.id}>{v.brand} {v.model} · {v.license_plate}</SelectItem>))}
                   </SelectContent>
                 </Select>
-              </FieldLbl>
-              <FieldLbl label="Service Name">
-                <Input data-testid="schedule-name-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-[#0A0A0A] border-white/10" placeholder="Oil change" />
-              </FieldLbl>
+              </Field>
+              <Field label={t("maintenance.service_name")}>
+                <Input data-testid="schedule-name-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-[#0A0A0A] border-white/10" placeholder={t("maintenance.service_placeholder")} />
+              </Field>
               <div className="grid grid-cols-2 gap-3">
-                <FieldLbl label="Type">
+                <Field label={t("maintenance.type")}>
                   <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                    <SelectTrigger data-testid="schedule-type-select" className="bg-[#0A0A0A] border-white/10">
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger data-testid="schedule-type-select" className="bg-[#0A0A0A] border-white/10"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-[#141414] border-white/10 text-white">
-                      <SelectItem value="mileage">By Mileage</SelectItem>
-                      <SelectItem value="monthly">By Month</SelectItem>
+                      <SelectItem value="mileage">{t("maintenance.by_mileage")}</SelectItem>
+                      <SelectItem value="monthly">{t("maintenance.by_month")}</SelectItem>
                     </SelectContent>
                   </Select>
-                </FieldLbl>
-                <FieldLbl label={form.type === "mileage" ? "Every (km)" : "Every (months)"}>
+                </Field>
+                <Field label={form.type === "mileage" ? t("maintenance.every_km") : t("maintenance.every_months")}>
                   <Input data-testid="schedule-interval-input" type="number" value={form.interval_value} onChange={(e) => setForm({ ...form, interval_value: e.target.value })} className="bg-[#0A0A0A] border-white/10 font-mono" />
-                </FieldLbl>
+                </Field>
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={submitSchedule} data-testid="schedule-submit-btn" className="bg-blue-600 hover:bg-blue-700 text-white">
-                Create Schedule
-              </Button>
+              <Button onClick={submitSchedule} data-testid="schedule-submit-btn" className="bg-blue-600 hover:bg-blue-700 text-white">{t("maintenance.create")}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -157,25 +154,23 @@ export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
       <Tabs defaultValue="alerts" className="w-full">
         <TabsList className="bg-[#141414] border border-white/10 p-1 h-auto">
           <TabsTrigger value="alerts" data-testid="maint-tab-alerts" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-zinc-400 px-4 py-1.5 rounded-sm">
-            <Wrench className="w-4 h-4 mr-2" /> Notifications & Schedules
+            <Wrench className="w-4 h-4 mr-2" /> {t("maintenance.tab_alerts")}
           </TabsTrigger>
           <TabsTrigger value="history" data-testid="maint-tab-history" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-zinc-400 px-4 py-1.5 rounded-sm">
-            <HistoryIcon className="w-4 h-4 mr-2" /> History
+            <HistoryIcon className="w-4 h-4 mr-2" /> {t("maintenance.tab_history")}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="alerts" className="mt-6 space-y-4">
           {schedules.length === 0 ? (
-            <EmptyMsg text="No maintenance schedules yet." />
+            <EmptyMsg text={t("maintenance.no_schedules")} />
           ) : (
             <Card className="bg-[#141414] border-white/10 rounded-lg overflow-hidden">
               <ul className="divide-y divide-white/5">
                 {alerts.map((a) => (
                   <li key={a.schedule_id} data-testid={`maint-alert-${a.schedule_id}`} className="px-5 py-4 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
-                      <div className={`w-9 h-9 rounded-md flex items-center justify-center border ${
-                        a.due ? "bg-amber-500/10 border-amber-500/30" : "bg-white/5 border-white/10"
-                      }`}>
+                      <div className={`w-9 h-9 rounded-md flex items-center justify-center border ${a.due ? "bg-amber-500/10 border-amber-500/30" : "bg-white/5 border-white/10"}`}>
                         <Wrench className={`w-4 h-4 ${a.due ? "text-amber-400" : "text-zinc-500"}`} />
                       </div>
                       <div>
@@ -184,15 +179,11 @@ export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`text-xs font-mono px-2 py-1 rounded-sm border ${
-                        a.due
-                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                          : "bg-white/5 text-zinc-400 border-white/10"
-                      }`}>
-                        {a.detail}
+                      <span className={`text-xs font-mono px-2 py-1 rounded-sm border ${a.due ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : "bg-white/5 text-zinc-400 border-white/10"}`}>
+                        {localizeDetail(t, a.detail)}
                       </span>
                       <Button size="sm" onClick={() => openComplete(a)} data-testid={`clear-alert-${a.schedule_id}`} className="bg-blue-600 hover:bg-blue-700 text-white h-8">
-                        <Check className="w-3.5 h-3.5 mr-1.5" /> Mark Done
+                        <Check className="w-3.5 h-3.5 mr-1.5" /> {t("maintenance.mark_done")}
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => removeSchedule(a.schedule_id)} data-testid={`schedule-delete-${a.schedule_id}`} className="text-zinc-500 hover:text-red-400 h-8 px-2">
                         <Trash2 className="w-3.5 h-3.5" />
@@ -207,7 +198,7 @@ export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
 
         <TabsContent value="history" className="mt-6">
           {history.length === 0 ? (
-            <EmptyMsg text="No completed maintenance yet." />
+            <EmptyMsg text={t("maintenance.no_history")} />
           ) : (
             <Card className="bg-[#141414] border-white/10 rounded-lg overflow-hidden">
               <ul className="divide-y divide-white/5">
@@ -238,23 +229,17 @@ export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
       <Dialog open={!!completing} onOpenChange={(o) => !o && setCompleting(null)}>
         <DialogContent className="bg-[#141414] border-white/10 text-white">
           <DialogHeader>
-            <DialogTitle className="font-heading">Mark Maintenance Done</DialogTitle>
+            <DialogTitle className="font-heading">{t("maintenance.complete_title")}</DialogTitle>
             <DialogDescription className="text-zinc-500">
               {completing?.name} — {completing?.vehicle_label}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
-            <FieldLbl label="Mileage at completion">
-              <Input data-testid="complete-mileage-input" type="number" value={completionMileage} onChange={(e) => setCompletionMileage(e.target.value)} className="bg-[#0A0A0A] border-white/10 font-mono" />
-            </FieldLbl>
-            <FieldLbl label="Notes (optional)">
-              <Input data-testid="complete-notes-input" value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)} className="bg-[#0A0A0A] border-white/10" />
-            </FieldLbl>
+            <Field label={t("maintenance.mileage_at_completion")}><Input data-testid="complete-mileage-input" type="number" value={completionMileage} onChange={(e) => setCompletionMileage(e.target.value)} className="bg-[#0A0A0A] border-white/10 font-mono" /></Field>
+            <Field label={t("maintenance.notes")}><Input data-testid="complete-notes-input" value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)} className="bg-[#0A0A0A] border-white/10" /></Field>
           </div>
           <DialogFooter>
-            <Button onClick={submitComplete} data-testid="complete-submit-btn" className="bg-blue-600 hover:bg-blue-700 text-white">
-              Save to History
-            </Button>
+            <Button onClick={submitComplete} data-testid="complete-submit-btn" className="bg-blue-600 hover:bg-blue-700 text-white">{t("maintenance.save_to_history")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -262,15 +247,10 @@ export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
   );
 };
 
-const FieldLbl = ({ label, children }) => (
+const Field = ({ label, children }) => (
   <div className="space-y-1.5">
     <Label className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{label}</Label>
     {children}
   </div>
 );
-
-const EmptyMsg = ({ text }) => (
-  <div className="border border-dashed border-white/10 rounded-lg p-12 text-center text-zinc-500 text-sm">
-    {text}
-  </div>
-);
+const EmptyMsg = ({ text }) => (<div className="border border-dashed border-white/10 rounded-lg p-12 text-center text-zinc-500 text-sm">{text}</div>);

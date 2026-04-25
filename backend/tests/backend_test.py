@@ -196,6 +196,142 @@ def test_handover_and_return_flow(session, created_ids):
     assert r.status_code == 400
 
 
+# ===== v1.1: Drivers CRUD =====
+def test_drivers_crud(session):
+    # Create
+    r = session.post(f"{API}/drivers", json={"name": "TEST_Alice", "phone": "+49 30 123", "company": "TEST_Acme"})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["name"] == "TEST_Alice"
+    assert d["phone"] == "+49 30 123"
+    assert d["company"] == "TEST_Acme"
+    assert "id" in d
+    did = d["id"]
+
+    # List
+    r = session.get(f"{API}/drivers")
+    assert r.status_code == 200
+    assert any(x["id"] == did for x in r.json())
+
+    # Update
+    r = session.put(f"{API}/drivers/{did}", json={"company": "TEST_Globex"})
+    assert r.status_code == 200
+    assert r.json()["company"] == "TEST_Globex"
+    assert r.json()["name"] == "TEST_Alice"
+
+    # GET via list to verify persistence
+    r = session.get(f"{API}/drivers")
+    fetched = next(x for x in r.json() if x["id"] == did)
+    assert fetched["company"] == "TEST_Globex"
+
+    # Delete
+    r = session.delete(f"{API}/drivers/{did}")
+    assert r.status_code == 200
+    r = session.get(f"{API}/drivers")
+    assert not any(x["id"] == did for x in r.json())
+
+    # 404 on deleting again
+    r = session.delete(f"{API}/drivers/{did}")
+    assert r.status_code == 404
+
+
+# ===== v1.1: CSV exports =====
+def test_export_vehicles_csv(session):
+    # Ensure at least one vehicle present
+    r = session.post(f"{API}/vehicles", json={"brand": "TEST_CSV", "model": "M1", "license_plate": "TEST-CSV1"})
+    assert r.status_code == 200
+    r = session.get(f"{API}/exports/vehicles.csv")
+    assert r.status_code == 200
+    assert "text/csv" in r.headers.get("content-type", "")
+    assert "attachment" in r.headers.get("content-disposition", "").lower()
+    body = r.text
+    header = body.splitlines()[0]
+    # Required headers
+    for col in ["id", "brand", "model", "license_plate", "status", "mileage", "created_at"]:
+        assert col in header
+    assert "TEST_CSV" in body
+
+
+def test_export_protocols_csv(session):
+    # Need a vehicle + handover
+    r = session.post(f"{API}/vehicles", json={"brand": "TEST_CSVP", "model": "P1", "license_plate": "TEST-CSVP1", "mileage": 100})
+    vid = r.json()["id"]
+    sig = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+    r = session.post(f"{API}/protocols/handover", json={
+        "vehicle_id": vid, "driver_name": "TEST_CSVDriver", "fuel_level": 70, "mileage": 200,
+        "extras": [{"name": "Triangle", "present": True}, {"name": "Vest", "present": False}],
+        "signature_base64": sig,
+    })
+    assert r.status_code == 200
+
+    r = session.get(f"{API}/exports/protocols.csv")
+    assert r.status_code == 200
+    assert "text/csv" in r.headers.get("content-type", "")
+    body = r.text
+    header = body.splitlines()[0]
+    for col in ["id", "type", "vehicle", "license_plate", "driver_name", "fuel_level",
+                "mileage", "extras_present", "extras_missing", "returned", "created_at"]:
+        assert col in header
+    assert "TEST_CSVDriver" in body
+    assert "Triangle" in body
+    assert "Vest" in body
+
+
+# ===== v1.1: Push =====
+def test_push_vapid_public(session):
+    r = session.get(f"{API}/push/vapid-public")
+    assert r.status_code == 200
+    data = r.json()
+    assert "public_key" in data
+    assert isinstance(data["public_key"], str)
+    assert len(data["public_key"]) > 20
+
+
+def test_push_subscribe_dedupe_and_unsubscribe(session):
+    sub = {
+        "endpoint": "https://example.com/push/test-endpoint-TEST123",
+        "keys": {"p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM=",
+                  "auth": "tBHItJI5svbpez7KI4CCXg=="}
+    }
+    r = session.post(f"{API}/push/subscribe", json=sub)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    first_id = body["id"]
+
+    # Dedupe -> same id
+    r2 = session.post(f"{API}/push/subscribe", json=sub)
+    assert r2.status_code == 200
+    assert r2.json()["id"] == first_id
+
+    # Unsubscribe
+    r = session.post(f"{API}/push/unsubscribe", json=sub)
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+    # After unsubscribe, subscribe again should yield a new id
+    r3 = session.post(f"{API}/push/subscribe", json=sub)
+    assert r3.status_code == 200
+    assert r3.json()["id"] != first_id
+    # Cleanup
+    session.post(f"{API}/push/unsubscribe", json=sub)
+
+
+# ===== v1.1: Public mobile vehicle =====
+def test_public_vehicle_info(session):
+    r = session.post(f"{API}/vehicles", json={"brand": "TEST_PUB", "model": "Mob", "license_plate": "TEST-PUB1"})
+    vid = r.json()["id"]
+    r = session.get(f"{API}/public/vehicles/{vid}")
+    assert r.status_code == 200
+    v = r.json()
+    assert v["id"] == vid
+    assert v["brand"] == "TEST_PUB"
+    assert "_id" not in v
+
+    r = session.get(f"{API}/public/vehicles/non-existent-id")
+    assert r.status_code == 404
+
+
 # ===== Vehicle delete cleanup =====
 def test_delete_vehicle(session, created_ids):
     r = session.post(f"{API}/vehicles", json={"brand": "TEST_Del", "model": "X", "license_plate": "TEST-DEL"})

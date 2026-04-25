@@ -1,14 +1,20 @@
 from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import io
+import csv
+import json
+import asyncio
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Any, Dict
 import uuid
 from datetime import datetime, timezone
+from pywebpush import webpush, WebPushException
 
 
 ROOT_DIR = Path(__file__).parent
@@ -419,6 +425,247 @@ async def root():
     return {"app": "FleetPro", "status": "ok"}
 
 
+# ============ DRIVERS ============
+
+class Driver(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+
+
+class DriverCreate(BaseModel):
+    name: str
+    phone: Optional[str] = None
+    company: Optional[str] = None
+
+
+class DriverUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    company: Optional[str] = None
+
+
+@api_router.get("/drivers", response_model=List[Driver])
+async def list_drivers():
+    return await db.drivers.find({}, {"_id": 0}).sort("name", 1).to_list(10000)
+
+
+@api_router.post("/drivers", response_model=Driver)
+async def create_driver(payload: DriverCreate):
+    d = Driver(**payload.model_dump())
+    await db.drivers.insert_one(d.model_dump())
+    return d
+
+
+@api_router.put("/drivers/{driver_id}", response_model=Driver)
+async def update_driver(driver_id: str, payload: DriverUpdate):
+    upd = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if upd:
+        res = await db.drivers.update_one({"id": driver_id}, {"$set": upd})
+        if res.matched_count == 0:
+            raise HTTPException(404, "Driver not found")
+    doc = await db.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Driver not found")
+    return doc
+
+
+@api_router.delete("/drivers/{driver_id}")
+async def delete_driver(driver_id: str):
+    res = await db.drivers.delete_one({"id": driver_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Driver not found")
+    return {"ok": True}
+
+
+# ============ CSV EXPORTS ============
+
+def _csv_response(rows: List[Dict[str, Any]], headers: List[str], filename: str) -> StreamingResponse:
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=headers, extrasaction="ignore")
+    writer.writeheader()
+    for r in rows:
+        writer.writerow(r)
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@api_router.get("/exports/vehicles.csv")
+async def export_vehicles_csv():
+    docs = await db.vehicles.find({}, {"_id": 0}).to_list(10000)
+    return _csv_response(
+        docs,
+        ["id", "brand", "model", "license_plate", "status", "mileage", "created_at"],
+        "vehicles.csv",
+    )
+
+
+@api_router.get("/exports/protocols.csv")
+async def export_protocols_csv():
+    docs = await db.protocols.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    vmap = {v["id"]: v for v in await db.vehicles.find({}, {"_id": 0}).to_list(10000)}
+    rows = []
+    for p in docs:
+        v = vmap.get(p["vehicle_id"], {})
+        rows.append({
+            "id": p["id"],
+            "type": p["type"],
+            "vehicle": f'{v.get("brand", "?")} {v.get("model", "?")}',
+            "license_plate": v.get("license_plate", ""),
+            "driver_name": p["driver_name"],
+            "fuel_level": p["fuel_level"],
+            "mileage": p["mileage"],
+            "extras_present": ", ".join(e["name"] for e in p.get("extras", []) if e.get("present")),
+            "extras_missing": ", ".join(e["name"] for e in p.get("extras", []) if not e.get("present")),
+            "returned": p.get("returned", False),
+            "created_at": p["created_at"],
+        })
+    return _csv_response(
+        rows,
+        ["id", "type", "vehicle", "license_plate", "driver_name", "fuel_level",
+         "mileage", "extras_present", "extras_missing", "returned", "created_at"],
+        "protocols.csv",
+    )
+
+
+# ============ PUSH NOTIFICATIONS ============
+
+VAPID_PUBLIC = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "mailto:admin@fleetpro.app")
+
+
+class PushSubscription(BaseModel):
+    endpoint: str
+    keys: Dict[str, str]
+
+
+class PushSubscriptionRecord(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    endpoint: str
+    keys: Dict[str, str]
+    created_at: str = Field(default_factory=now_iso)
+
+
+@api_router.get("/push/vapid-public")
+async def get_vapid_public():
+    return {"public_key": VAPID_PUBLIC}
+
+
+@api_router.post("/push/subscribe")
+async def push_subscribe(sub: PushSubscription):
+    existing = await db.push_subscriptions.find_one({"endpoint": sub.endpoint})
+    if existing:
+        return {"ok": True, "id": existing["id"]}
+    rec = PushSubscriptionRecord(endpoint=sub.endpoint, keys=sub.keys)
+    await db.push_subscriptions.insert_one(rec.model_dump())
+    return {"ok": True, "id": rec.id}
+
+
+@api_router.post("/push/unsubscribe")
+async def push_unsubscribe(sub: PushSubscription):
+    await db.push_subscriptions.delete_many({"endpoint": sub.endpoint})
+    return {"ok": True}
+
+
+def _send_push(subscription: Dict[str, Any], title: str, body: str, url: str = "/") -> bool:
+    try:
+        webpush(
+            subscription_info={"endpoint": subscription["endpoint"], "keys": subscription["keys"]},
+            data=json.dumps({"title": title, "body": body, "url": url}),
+            vapid_private_key=VAPID_PRIVATE,
+            vapid_claims={"sub": VAPID_EMAIL},
+        )
+        return True
+    except WebPushException as e:
+        logging.warning(f"WebPush failed: {e}")
+        # Cleanup expired subscriptions (410 Gone)
+        if getattr(e.response, "status_code", None) in (404, 410):
+            return False
+        return False
+
+
+async def _broadcast_push(title: str, body: str, url: str = "/"):
+    subs = await db.push_subscriptions.find({}, {"_id": 0}).to_list(1000)
+    expired = []
+    for s in subs:
+        ok = await asyncio.get_event_loop().run_in_executor(
+            None, _send_push, s, title, body, url
+        )
+        if not ok:
+            expired.append(s["endpoint"])
+    if expired:
+        await db.push_subscriptions.delete_many({"endpoint": {"$in": expired}})
+
+
+@api_router.post("/push/test")
+async def push_test():
+    await _broadcast_push("FleetPro", "Push notifications are working!", "/")
+    return {"ok": True}
+
+
+# ============ MAINTENANCE BACKGROUND TASK ============
+
+async def _check_maintenance_alerts_loop():
+    """Every 30 minutes scan for newly-due maintenance and push once per (schedule_id, due_period)."""
+    while True:
+        try:
+            schedules = await db.maintenance_schedules.find({}, {"_id": 0}).to_list(10000)
+            vehicles = {v["id"]: v for v in await db.vehicles.find({}, {"_id": 0}).to_list(10000)}
+            now = datetime.now(timezone.utc)
+            for s in schedules:
+                v = vehicles.get(s["vehicle_id"])
+                if not v:
+                    continue
+                due = False
+                marker = None
+                if s["type"] == "mileage":
+                    last = s.get("last_done_mileage") or 0
+                    if v.get("mileage", 0) >= last + s["interval_value"]:
+                        due = True
+                        marker = f"mileage:{last + s['interval_value']}"
+                else:
+                    last_iso = s.get("last_done_date")
+                    if last_iso:
+                        last_dt = datetime.fromisoformat(last_iso)
+                        months = (now.year - last_dt.year) * 12 + (now.month - last_dt.month)
+                        if months >= s["interval_value"]:
+                            due = True
+                            marker = f"month:{last_iso}:{s['interval_value']}"
+                if due and marker:
+                    notified = await db.maintenance_notifications.find_one({
+                        "schedule_id": s["id"], "marker": marker
+                    })
+                    if not notified:
+                        await db.maintenance_notifications.insert_one({
+                            "schedule_id": s["id"], "marker": marker, "sent_at": now_iso(),
+                        })
+                        await _broadcast_push(
+                            f"Maintenance Due: {s['name']}",
+                            f"{v['brand']} {v['model']} ({v['license_plate']}) needs service.",
+                            "/",
+                        )
+        except Exception as ex:
+            logging.exception(f"Maintenance loop error: {ex}")
+        await asyncio.sleep(1800)
+
+
+# ============ MOBILE HANDOVER (PUBLIC LITE INFO) ============
+
+@api_router.get("/public/vehicles/{vehicle_id}")
+async def public_vehicle_info(vehicle_id: str):
+    v = await db.vehicles.find_one({"id": vehicle_id}, {"_id": 0})
+    if not v:
+        raise HTTPException(404, "Vehicle not found")
+    return v
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -434,6 +681,11 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+@app.on_event("startup")
+async def _startup():
+    asyncio.create_task(_check_maintenance_alerts_loop())
 
 
 @app.on_event("shutdown")

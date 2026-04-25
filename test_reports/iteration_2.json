@@ -1,0 +1,36 @@
+{
+  "summary": "FleetPro v1.1 testing complete. All 12 backend pytest tests pass (5 v1.0 regression + 7 new for v1.1: drivers CRUD, vehicles CSV, protocols CSV, push VAPID public, push subscribe/dedupe/unsubscribe, public mobile vehicle endpoint). All v1.1 frontend flows verified: i18n DE/EN switch via SettingsMenu, Drivers tab CRUD, Vehicles QR modal + CSV download, Protocols History CSV download + per-protocol PDF download, handover-driver-select dropdown with 'Type a name' option, mobile /handover/{id} route loads with vehicle info + signature canvas, PWA assets reachable (manifest.json/sw.js/icon-192.png/icon-512.png all 200) and service worker registered.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Header", "issues": ["When a 'Driver added' toast appears it briefly overlaps the PushButton label in the header area; cosmetic only, doesn't block clicks."]},
+      {"screen": "Protocols History (carry-over from iter1)", "issues": ["Stale protocols whose vehicle was deleted still display as 'Unknown vehicle' in history."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "(Optional) On DELETE /api/vehicles/{id}, also delete db.protocols for that vehicle to avoid orphan history rows (carry-over from iter1).",
+    "(Optional) Consider returning 201 status on POST creates (vehicles, drivers, damages, schedules, protocols) for REST correctness; currently returns 200."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~700 lines and starts to mix concerns (vehicles, damages, maintenance, protocols, drivers, exports, push, public). Consider splitting into routers: routers/vehicles.py, routers/drivers.py, routers/exports.py, routers/push.py — gets close to the 700-line guideline.",
+    "VAPID_PRIVATE_KEY is committed in /app/backend/.env. Acceptable for preview but should be excluded from VCS / rotated for prod.",
+    "_check_maintenance_alerts_loop sleeps 1800s before first iteration would be a problem only for first run; current code runs immediately then sleeps — OK.",
+    "push_subscribe stores keys but has no validation of key format; pywebpush will fail later. Low risk.",
+    "exports/protocols.csv writes 'returned' boolean directly; csv writer renders True/False — acceptable, but documenting for consumers.",
+    "All endpoints exclude _id; UUID ids; Pydantic validation in place; CORS via env. Good."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (8/8 v1.1 flows)"},
+  "test_credentials": "N/A - no auth",
+  "seed_data_creation": "Created TEST_/TESTUI_ prefixed vehicles, one driver TESTUI_Bob, several protocols (handover/return) for export and PDF tests. Some test data persists in DB.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest at /app/backend/tests/backend_test.py now covers v1.0 + v1.1: drivers CRUD (create/list/update/delete + 404), vehicles & protocols CSV exports (validates Content-Type + CSV headers + row data), push/vapid-public, push/subscribe dedupe by endpoint and unsubscribe, public/vehicles/{id}. Frontend tested via Playwright: SettingsMenu (settings-menu-trigger -> lang-de) translates Dashboard/tabs/footer to German (Willkommen/Fahrzeuge/Fahrer/Wartung/Protokolle), Drivers add via driver-name/phone/company-input + driver-submit-btn, vehicle-qr-{id} opens QR modal with rendered SVG, vehicles-export-csv-btn triggers download (vehicles.csv), Protocols History tab has protocols-export-csv-btn (downloads protocols.csv) and pdf-protocol-{id} (downloads protocol_{plate}_{shortid}.pdf via jsPDF), handover-driver-select shows 'Type a name' option, /handover/{vehicleId} mobile route renders vehicle info + signature canvas. PWA: /manifest.json /sw.js /icon-192.png /icon-512.png all return 200 and SW registers at /sw.js scope. Note: protocols-export-csv-btn lives only inside proto-tab-history, not proto-tab-handover.",
+  "rca_of_the_issue": "N/A - no bugs found"
+}
