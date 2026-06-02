@@ -311,30 +311,67 @@ const DamagesSection = ({ vehicles, onChange }) => {
       {damages.length === 0 ? (
         <EmptyState text={t("damages.empty")} />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {damages.map((d) => (
-            <Card key={d.id} data-testid={`damage-card-${d.id}`} className="bg-[#141414] border-white/10 rounded-lg overflow-hidden hover:border-white/30 transition-all">
-              <div className="aspect-video bg-[#0A0A0A] flex items-center justify-center border-b border-white/10">
-                {d.photo_base64 ? <img src={d.photo_base64} alt="damage" className="w-full h-full object-cover" /> : <ImageIcon className="w-10 h-10 text-zinc-700" />}
-              </div>
-              <div className="p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-mono text-zinc-500">{vehicleLabel(d.vehicle_id)}</div>
-                    <div className="text-sm mt-1 line-clamp-2">{d.description}</div>
+        (() => {
+          // Group by vehicle, sort vehicles alphabetically (brand then model)
+          const groups = new Map();
+          for (const d of damages) {
+            const arr = groups.get(d.vehicle_id) || [];
+            arr.push(d);
+            groups.set(d.vehicle_id, arr);
+          }
+          const sortedVehicleIds = [...groups.keys()].sort((a, b) => {
+            const va = vehicles.find((x) => x.id === a);
+            const vb = vehicles.find((x) => x.id === b);
+            const la = va ? `${va.brand} ${va.model}`.toLowerCase() : "zzz_unknown";
+            const lb = vb ? `${vb.brand} ${vb.model}`.toLowerCase() : "zzz_unknown";
+            return la.localeCompare(lb);
+          });
+          return (
+            <div className="space-y-6">
+              {sortedVehicleIds.map((vid) => {
+                const v = vehicles.find((x) => x.id === vid);
+                const items = groups.get(vid).slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+                return (
+                  <div key={vid} data-testid={`damage-group-${vid}`} className="space-y-3">
+                    <div className="flex items-center gap-3 pb-2 border-b border-white/10">
+                      <div className="w-8 h-8 rounded-md bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
+                        <CarIcon className="w-4 h-4 text-blue-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-heading font-semibold">
+                          {v ? `${v.brand} ${v.model}` : t("common.unknown")}
+                        </div>
+                        <div className="text-xs font-mono text-zinc-500">{v?.license_plate || "—"}</div>
+                      </div>
+                      <span className="ml-auto text-xs font-mono text-zinc-500">{items.length}</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {items.map((d) => (
+                        <Card key={d.id} data-testid={`damage-card-${d.id}`} className="bg-[#141414] border-white/10 rounded-lg overflow-hidden hover:border-white/30 transition-all">
+                          <div className="aspect-video bg-[#0A0A0A] flex items-center justify-center border-b border-white/10">
+                            {d.photo_base64 ? <img src={d.photo_base64} alt="damage" className="w-full h-full object-cover" /> : <ImageIcon className="w-10 h-10 text-zinc-700" />}
+                          </div>
+                          <div className="p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="text-sm line-clamp-3 flex-1">{d.description}</div>
+                              <span className={`px-2 py-0.5 rounded-sm text-[10px] font-mono uppercase tracking-wider border shrink-0 ${d.tolerated ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}>
+                                {d.tolerated ? t("damages.tolerated") : t("damages.not_tolerated")}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-zinc-600">
+                              <span>{formatDate(d.created_at)}</span>
+                              <Button size="sm" variant="ghost" onClick={() => remove(d.id)} data-testid={`damage-delete-${d.id}`} className="text-zinc-500 hover:text-red-400 h-7 px-2"><Trash2 className="w-3.5 h-3.5" /></Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-sm text-[10px] font-mono uppercase tracking-wider border ${d.tolerated ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}>
-                    {d.tolerated ? t("damages.tolerated") : t("damages.not_tolerated")}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-zinc-600">
-                  <span>{formatDate(d.created_at)}</span>
-                  <Button size="sm" variant="ghost" onClick={() => remove(d.id)} data-testid={`damage-delete-${d.id}`} className="text-zinc-500 hover:text-red-400 h-7 px-2"><Trash2 className="w-3.5 h-3.5" /></Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+                );
+              })}
+            </div>
+          );
+        })()
       )}
     </div>
   );

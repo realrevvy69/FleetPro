@@ -133,6 +133,8 @@ class HandoverCreate(BaseModel):
     mileage: int
     extras: List[ExtraItem] = []
     signature_base64: str
+    handover_signature_base64: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class ReturnCreate(BaseModel):
@@ -142,6 +144,8 @@ class ReturnCreate(BaseModel):
     mileage: int
     extras: List[ExtraItem] = []
     signature_base64: str
+    handover_signature_base64: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class Protocol(BaseModel):
@@ -153,6 +157,8 @@ class Protocol(BaseModel):
     mileage: int
     extras: List[ExtraItem] = []
     signature_base64: str
+    handover_signature_base64: Optional[str] = None
+    notes: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
     returned: bool = False
     return_protocol_id: Optional[str] = None
@@ -386,6 +392,8 @@ async def create_handover(payload: HandoverCreate):
         mileage=payload.mileage,
         extras=payload.extras,
         signature_base64=payload.signature_base64,
+        handover_signature_base64=payload.handover_signature_base64,
+        notes=payload.notes,
     )
     await db.protocols.insert_one(p.model_dump())
     await db.vehicles.update_one(
@@ -410,6 +418,8 @@ async def create_return(payload: ReturnCreate):
         mileage=payload.mileage,
         extras=payload.extras,
         signature_base64=payload.signature_base64,
+        handover_signature_base64=payload.handover_signature_base64,
+        notes=payload.notes,
     )
     await db.protocols.insert_one(rp.model_dump())
     await db.protocols.update_one(

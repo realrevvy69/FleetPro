@@ -11,6 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../components/ui/select";
 import { Slider } from "../components/ui/slider";
+import { Textarea } from "../components/ui/textarea";
 import { Checkbox } from "../components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { api, API } from "../lib/api";
@@ -61,11 +62,14 @@ const initialForm = () => ({
   extras: [],
   newExtra: "",
   signature_base64: "",
+  handover_signature_base64: "",
+  notes: "",
 });
 
 const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
   const { t } = useTranslation();
   const [form, setForm] = useState(initialForm());
+  const [linkedDamages, setLinkedDamages] = useState([]);
   const available = vehicles.filter((v) => v.status !== "on_road");
 
   useEffect(() => {
@@ -78,8 +82,12 @@ const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
           extras: (v.extras || []).map((name) => ({ name, present: true })),
         }));
       }
+      api.get(`/damages?vehicle_id=${form.vehicle_id}`)
+        .then((r) => setLinkedDamages(r.data))
+        .catch(() => setLinkedDamages([]));
     } else {
       setForm((f) => ({ ...f, extras: [] }));
+      setLinkedDamages([]);
     }
     // eslint-disable-next-line
   }, [form.vehicle_id]);
@@ -116,6 +124,8 @@ const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
         mileage: Number(form.mileage),
         extras: form.extras.map(({ name, present }) => ({ name, present })),
         signature_base64: form.signature_base64,
+        handover_signature_base64: form.handover_signature_base64 || null,
+        notes: form.notes || null,
       });
       toast.success(t("protocols.handover_completed"));
       setForm(initialForm());
@@ -206,14 +216,64 @@ const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
             </Button>
           </div>
         </div>
+
+        {form.vehicle_id && (
+          <div className="space-y-2" data-testid="handover-linked-damages">
+            <Label className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{t("protocols.linked_damages")}</Label>
+            <div className="p-3 rounded-md bg-[#0A0A0A] border border-white/10 max-h-44 overflow-y-auto">
+              {linkedDamages.length === 0 ? (
+                <div className="text-xs text-zinc-500 italic">{t("protocols.no_linked_damages")}</div>
+              ) : (
+                <ul className="space-y-2">
+                  {linkedDamages.map((d) => (
+                    <li key={d.id} data-testid={`linked-damage-${d.id}`} className="flex items-start gap-3">
+                      {d.photo_base64 ? (
+                        <img src={d.photo_base64} alt="damage" className="w-12 h-12 object-cover rounded-sm border border-white/10 shrink-0" />
+                      ) : (
+                        <div className="w-12 h-12 bg-white/5 rounded-sm border border-white/10 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm line-clamp-2">{d.description}</div>
+                        <span className={`mt-1 inline-block px-1.5 py-0.5 rounded-sm text-[9px] font-mono uppercase tracking-wider border ${
+                          d.tolerated
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/10 text-red-400 border-red-500/30"
+                        }`}>
+                          {d.tolerated ? t("damages.tolerated") : t("damages.not_tolerated")}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        <Field label={t("protocols.notes")}>
+          <Textarea
+            data-testid="handover-notes-input"
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            placeholder={t("protocols.notes_placeholder")}
+            className="bg-[#0A0A0A] border-white/10 min-h-[70px]"
+          />
+        </Field>
       </Card>
 
-      <Card className="bg-[#141414] border-white/10 rounded-lg p-6 space-y-4">
+      <Card className="bg-[#141414] border-white/10 rounded-lg p-6 space-y-5">
         <div>
-          <h3 className="font-heading text-lg font-semibold">{t("protocols.signature")}</h3>
+          <h3 className="font-heading text-lg font-semibold">{t("protocols.signature_driver")}</h3>
           <p className="text-xs text-zinc-500 mt-1">{t("protocols.signature_hint")}</p>
         </div>
-        <SignaturePad onChange={(data) => setForm((f) => ({ ...f, signature_base64: data }))} />
+        <SignaturePad onChange={(data) => setForm((f) => ({ ...f, signature_base64: data }))} testId="driver-signature-pad" />
+
+        <div className="pt-3 border-t border-white/10">
+          <h3 className="font-heading text-lg font-semibold">{t("protocols.signature_operator")}</h3>
+          <p className="text-xs text-zinc-500 mt-1">{t("protocols.signature_hint")}</p>
+        </div>
+        <SignaturePad onChange={(data) => setForm((f) => ({ ...f, handover_signature_base64: data }))} testId="operator-signature-pad" />
+
         <Button onClick={submit} data-testid="handover-submit-btn" className="w-full bg-blue-600 hover:bg-blue-700 text-white blue-glow border border-blue-500/50 h-11">
           <Check className="w-4 h-4 mr-2" /> {t("protocols.complete_handover")}
         </Button>
@@ -226,7 +286,7 @@ const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
 const HistoryList = ({ protocols, vehicles, onChanged }) => {
   const { t } = useTranslation();
   const [returning, setReturning] = useState(null);
-  const [retForm, setRetForm] = useState({ driver_name: "", fuel_level: 50, mileage: "", extras: [], signature_base64: "" });
+  const [retForm, setRetForm] = useState({ driver_name: "", fuel_level: 50, mileage: "", extras: [], signature_base64: "", handover_signature_base64: "", notes: "" });
   const [viewing, setViewing] = useState(null);
   const [search, setSearch] = useState("");
   const [pdfChoice, setPdfChoice] = useState(null); // protocol pending PDF lang choice
@@ -255,6 +315,8 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
       mileage: vMap[p.vehicle_id]?.mileage ?? p.mileage,
       extras: p.extras.map((e) => ({ ...e })),
       signature_base64: "",
+      handover_signature_base64: "",
+      notes: "",
     });
   };
 
@@ -269,6 +331,8 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
         mileage: Number(retForm.mileage),
         extras: retForm.extras,
         signature_base64: retForm.signature_base64,
+        handover_signature_base64: retForm.handover_signature_base64 || null,
+        notes: retForm.notes || null,
       });
       toast.success(t("protocols.returned_status"));
       setReturning(null);
@@ -364,8 +428,20 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
                   ))}
                 </div>
               </div>
-              <Field label={t("protocols.signature")}>
+              <Field label={t("protocols.notes")}>
+                <Textarea
+                  data-testid="return-notes-input"
+                  value={retForm.notes}
+                  onChange={(e) => setRetForm({ ...retForm, notes: e.target.value })}
+                  placeholder={t("protocols.notes_placeholder")}
+                  className="bg-[#0A0A0A] border-white/10 min-h-[60px]"
+                />
+              </Field>
+              <Field label={t("protocols.signature_driver")}>
                 <SignaturePad onChange={(data) => setRetForm((f) => ({ ...f, signature_base64: data }))} testId="return-signature-pad" />
+              </Field>
+              <Field label={t("protocols.signature_operator")}>
+                <SignaturePad onChange={(data) => setRetForm((f) => ({ ...f, handover_signature_base64: data }))} testId="return-operator-signature-pad" />
               </Field>
             </div>
           )}
@@ -423,9 +499,21 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
                 </div>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1">{t("protocols.signature")}</div>
-                <img src={viewing.signature_base64} alt="signature" className="w-full bg-[#0A0A0A] rounded-md border border-white/10" />
+                <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1">{t("protocols.signature_driver")}</div>
+                <img src={viewing.signature_base64} alt="driver-signature" className="w-full bg-[#0A0A0A] rounded-md border border-white/10" />
               </div>
+              {viewing.handover_signature_base64 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1">{t("protocols.signature_operator")}</div>
+                  <img src={viewing.handover_signature_base64} alt="operator-signature" className="w-full bg-[#0A0A0A] rounded-md border border-white/10" />
+                </div>
+              )}
+              {viewing.notes && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1">{t("protocols.notes")}</div>
+                  <div className="bg-[#0A0A0A] border border-white/10 rounded-md p-3 text-sm text-zinc-200 whitespace-pre-wrap">{viewing.notes}</div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
