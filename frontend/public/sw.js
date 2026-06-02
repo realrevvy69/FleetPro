@@ -5,8 +5,8 @@
  *  - Cache-first only for hashed static assets (JS/CSS/images/fonts)
  *  - Do NOT auto-claim — only the next page load uses the new SW
  */
-const CACHE = "fleetpro-shell-v3";
-const RUNTIME = "fleetpro-runtime-v3";
+const CACHE = "fleetpro-shell-v4";
+const RUNTIME = "fleetpro-runtime-v4";
 const SHELL_URLS = ["/manifest.json", "/favicon.ico", "/icon-192.png", "/icon-512.png"];
 
 // Paths we must NOT touch — these belong to CRA / webpack / sockjs / browser sync

@@ -16,9 +16,10 @@ export const SignaturePad = ({ onChange, testId = "signature-pad" }) => {
     canvas.height = rect.height * ratio;
     const ctx = canvas.getContext("2d");
     ctx.scale(ratio, ratio);
-    ctx.fillStyle = "#0A0A0A";
+    const isLight = document.documentElement.classList.contains("light");
+    ctx.fillStyle = isLight ? "#FFFFFF" : "#0A0A0A";
     ctx.fillRect(0, 0, rect.width, rect.height);
-    ctx.strokeStyle = "#FFFFFF";
+    ctx.strokeStyle = isLight ? "#18181B" : "#FFFFFF";
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -62,7 +63,8 @@ export const SignaturePad = ({ onChange, testId = "signature-pad" }) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     const rect = canvas.getBoundingClientRect();
-    ctx.fillStyle = "#0A0A0A";
+    const isLight = document.documentElement.classList.contains("light");
+    ctx.fillStyle = isLight ? "#FFFFFF" : "#0A0A0A";
     ctx.fillRect(0, 0, rect.width, rect.height);
     setHasSignature(false);
     onChange?.("");
