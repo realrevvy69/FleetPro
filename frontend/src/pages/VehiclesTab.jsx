@@ -279,22 +279,50 @@ const DamagesSection = ({ vehicles, onChange }) => {
               </Field>
               <div className="space-y-3 p-3 rounded-md bg-[#0A0A0A] border border-white/10">
                 <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{t("damages.category")}</div>
-                <label className="flex items-center gap-3 cursor-pointer" data-testid="damage-not-tolerated-radio">
-                  <input type="radio" checked={!form.tolerated} onChange={() => setForm({ ...form, tolerated: false, tolerated_confirm: false })} className="accent-red-500" />
-                  <span className="text-sm">
-                    <span className="text-red-400 font-medium">{t("damages.not_tolerated")}</span>
-                    <span className="text-zinc-500 text-xs ml-2">{t("damages.not_tolerated_hint")}</span>
-                  </span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer" data-testid="damage-tolerated-radio">
-                  <input type="radio" checked={form.tolerated} onChange={() => setForm({ ...form, tolerated: true })} className="accent-emerald-500" />
-                  <span className="text-sm">
-                    <span className="text-emerald-400 font-medium">{t("damages.tolerated")}</span>
-                    <span className="text-zinc-500 text-xs ml-2">{t("damages.tolerated_hint")}</span>
-                  </span>
-                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, tolerated: false, tolerated_confirm: false })}
+                    data-testid="damage-not-tolerated-radio"
+                    className={`text-left p-3 rounded-md border-2 transition-all ${
+                      !form.tolerated
+                        ? "border-red-500 bg-red-500/10"
+                        : "border-white/10 bg-transparent hover:border-white/20"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full border-2 ${
+                        !form.tolerated ? "border-red-400 bg-red-400" : "border-white/30 bg-transparent"
+                      }`} />
+                      <span className={`text-sm font-medium ${!form.tolerated ? "text-red-400" : "text-zinc-300"}`}>
+                        {t("damages.not_tolerated")}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-zinc-500 mt-1.5 pl-5">{t("damages.not_tolerated_hint")}</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, tolerated: true })}
+                    data-testid="damage-tolerated-radio"
+                    className={`text-left p-3 rounded-md border-2 transition-all ${
+                      form.tolerated
+                        ? "border-emerald-500 bg-emerald-500/10"
+                        : "border-white/10 bg-transparent hover:border-white/20"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full border-2 ${
+                        form.tolerated ? "border-emerald-400 bg-emerald-400" : "border-white/30 bg-transparent"
+                      }`} />
+                      <span className={`text-sm font-medium ${form.tolerated ? "text-emerald-400" : "text-zinc-300"}`}>
+                        {t("damages.tolerated")}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-zinc-500 mt-1.5 pl-5">{t("damages.tolerated_hint")}</div>
+                  </button>
+                </div>
                 {form.tolerated && (
-                  <label className="flex items-start gap-3 mt-3 pt-3 border-t border-white/10">
+                  <label className="flex items-start gap-3 mt-2 pt-3 border-t border-white/10">
                     <Checkbox checked={form.tolerated_confirm} onCheckedChange={(v) => setForm({ ...form, tolerated_confirm: !!v })} data-testid="damage-tolerated-confirm-checkbox" className="border-white/30 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 mt-0.5" />
                     <span className="text-xs text-zinc-400">{t("damages.tolerated_confirm")}</span>
                   </label>
