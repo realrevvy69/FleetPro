@@ -15,7 +15,7 @@ import MobileHandoverPage from "./pages/MobileHandoverPage";
 import { PushButton } from "./components/PushButton";
 import { SettingsMenu } from "./components/SettingsMenu";
 import { ensureServiceWorker } from "./lib/push";
-import { registerServiceWorker } from "./lib/sw";
+import { registerServiceWorker, unregisterStaleServiceWorker } from "./lib/sw";
 import { Car, LayoutDashboard, Wrench, ClipboardSignature, Activity, Users } from "lucide-react";
 
 const Shell = () => {
@@ -44,7 +44,12 @@ const Shell = () => {
     }
   }, [t]);
 
-  useEffect(() => { refresh(); registerServiceWorker().catch(() => {}); ensureServiceWorker().catch(() => {}); }, [refresh]);
+  useEffect(() => {
+    refresh();
+    unregisterStaleServiceWorker().catch(() => {});
+    registerServiceWorker().catch(() => {});
+    ensureServiceWorker().catch(() => {});
+  }, [refresh]);
 
   const dueAlerts = alerts.filter((a) => a.due);
 

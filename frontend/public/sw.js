@@ -1,10 +1,21 @@
-/* FleetPro Service Worker — push + offline cache + write queue */
-const CACHE = "fleetpro-shell-v2";
-const RUNTIME = "fleetpro-runtime-v2";
-const SHELL_URLS = [
-  "/",
-  "/manifest.json",
-  "/favicon.ico",
+/* FleetPro Service Worker — push + offline cache + write queue
+ * v3 fixes:
+ *  - Bypass HMR / dev-server endpoints (no interference with CRA WebSocket → no refresh loops)
+ *  - Network-first for HTML navigations so deploys propagate immediately
+ *  - Cache-first only for hashed static assets (JS/CSS/images/fonts)
+ *  - Do NOT auto-claim — only the next page load uses the new SW
+ */
+const CACHE = "fleetpro-shell-v3";
+const RUNTIME = "fleetpro-runtime-v3";
+const SHELL_URLS = ["/manifest.json", "/favicon.ico", "/icon-192.png", "/icon-512.png"];
+
+// Paths we must NOT touch — these belong to CRA / webpack / sockjs / browser sync
+const BYPASS_PATTERNS = [
+  /^\/sockjs-node/,
+  /^\/ws($|\/)/,
+  /^\/__webpack_hmr/,
+  /\.hot-update\.(js|json)$/,
+  /^\/static\/js\/.*\.hot-update\./,
 ];
 
 // ---------- INSTALL / ACTIVATE ----------
@@ -12,6 +23,8 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE).then((c) => c.addAll(SHELL_URLS).catch(() => {}))
   );
+  // One-time skipWaiting on this version bump so users stuck on the previous
+  // (HMR-breaking) SW get unblocked immediately. Future versions can drop this.
   self.skipWaiting();
 });
 
@@ -29,7 +42,14 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Skip cross-origin and non-GET (write queue handled below for /api)
+  // 1) Only handle http(s) same-origin requests. Skip ws:, blob:, data:, chrome-extension:, etc.
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
+  if (url.origin !== self.location.origin) return;
+
+  // 2) Skip dev-server / HMR paths entirely (let them go directly to network)
+  if (BYPASS_PATTERNS.some((re) => re.test(url.pathname))) return;
+
+  // 3) Writes → handle via write-queue
   if (req.method !== "GET") {
     if (url.pathname.startsWith("/api/")) {
       event.respondWith(handleWriteRequest(req));
@@ -37,23 +57,31 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API GET → network first, fallback to runtime cache
+  // 4) API GET → network first, fallback to runtime cache
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirst(req));
     return;
   }
 
-  // App shell / static → cache first
-  if (url.origin === self.location.origin) {
-    event.respondWith(cacheFirst(req));
+  // 5) HTML / SPA navigations → network first (so a fresh deploy shows immediately)
+  const isNavigation = req.mode === "navigate" || req.destination === "document" ||
+    (req.headers.get("accept") || "").includes("text/html");
+  if (isNavigation) {
+    event.respondWith(networkFirstHtml(req));
+    return;
   }
+
+  // 6) Static assets (hashed by webpack) → cache first
+  event.respondWith(cacheFirst(req));
 });
 
 const networkFirst = async (req) => {
   try {
     const res = await fetch(req);
-    const cache = await caches.open(RUNTIME);
-    cache.put(req, res.clone());
+    if (res && res.ok) {
+      const cache = await caches.open(RUNTIME);
+      cache.put(req, res.clone());
+    }
     return res;
   } catch (e) {
     const cached = await caches.match(req);
@@ -65,18 +93,34 @@ const networkFirst = async (req) => {
   }
 };
 
+const networkFirstHtml = async (req) => {
+  try {
+    const res = await fetch(req);
+    if (res && res.ok) {
+      const cache = await caches.open(CACHE);
+      cache.put("/", res.clone()); // store latest shell
+    }
+    return res;
+  } catch (e) {
+    const cachedRoot = await caches.match("/");
+    if (cachedRoot) return cachedRoot;
+    const cached = await caches.match(req);
+    return cached || new Response("Offline", { status: 503 });
+  }
+};
+
 const cacheFirst = async (req) => {
   const cached = await caches.match(req);
   if (cached) return cached;
   try {
     const res = await fetch(req);
-    if (res.ok && req.url.startsWith(self.location.origin)) {
+    if (res && res.ok) {
       const cache = await caches.open(RUNTIME);
       cache.put(req, res.clone());
     }
     return res;
   } catch (e) {
-    return caches.match("/");
+    return Response.error();
   }
 };
 
@@ -126,10 +170,8 @@ const deleteFromQueue = async (id) => {
 
 const handleWriteRequest = async (req) => {
   try {
-    const res = await fetch(req.clone());
-    return res;
+    return await fetch(req.clone());
   } catch (err) {
-    // offline → queue
     const body = await req.clone().text();
     await addToQueue({
       url: req.url,
@@ -161,8 +203,7 @@ const flushQueue = async () => {
         await deleteFromQueue(item.id);
       }
     } catch {
-      // still offline — stop trying
-      return;
+      return; // still offline
     }
   }
 };
@@ -172,13 +213,9 @@ self.addEventListener("sync", (event) => {
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "FLUSH_QUEUE") {
-    event.waitUntil(flushQueue());
-  }
+  if (event.data?.type === "FLUSH_QUEUE") event.waitUntil(flushQueue());
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
-
-// Best-effort flush whenever a page comes online
-self.addEventListener("online", () => flushQueue());
 
 // ---------- PUSH ----------
 self.addEventListener("push", (event) => {
