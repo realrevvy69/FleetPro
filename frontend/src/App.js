@@ -16,11 +16,11 @@ import { PushButton } from "./components/PushButton";
 import { SettingsMenu } from "./components/SettingsMenu";
 import { ensureServiceWorker } from "./lib/push";
 import { registerServiceWorker, unregisterStaleServiceWorker } from "./lib/sw";
-import { Car, LayoutDashboard, Wrench, ClipboardSignature, Activity, Users } from "lucide-react";
+import { Car, Wrench, ClipboardSignature, Activity, Users } from "lucide-react";
 
 const Shell = () => {
   const { t } = useTranslation();
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = useState("protocols");
   const [vehicles, setVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [stats, setStats] = useState({ total: 0, on_road: 0, damaged: 0, maintenance: 0, parked: 0 });
@@ -59,11 +59,17 @@ const Shell = () => {
 
       <header className="border-b border-white/10 bg-[#0A0A0A]/95 backdrop-blur sticky top-0 z-30">
         <div className="max-w-[1400px] mx-auto px-6 md:px-8 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3" data-testid="app-logo">
+          <button
+            type="button"
+            onClick={() => setTab("dashboard")}
+            data-testid="logo-dashboard-btn"
+            className="flex items-center gap-3 outline-none focus:ring-1 focus:ring-blue-500 rounded-md p-1 -ml-1 hover:bg-white/5 transition-colors"
+            title={t("tabs.dashboard")}
+          >
             <div className="w-9 h-9 rounded-md bg-blue-600 flex items-center justify-center blue-glow">
               <Car className="w-5 h-5 text-white" />
             </div>
-            <div>
+            <div className="text-left">
               <div className="font-heading font-bold text-xl tracking-tight leading-none">
                 Fleet<span className="text-blue-500">Pro</span>
               </div>
@@ -71,7 +77,7 @@ const Shell = () => {
                 Command Center
               </div>
             </div>
-          </div>
+          </button>
           <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-end">
             <div className="hidden md:flex items-center gap-2 text-xs font-mono text-zinc-400">
               <Activity className="w-3.5 h-3.5 text-emerald-400" />
@@ -91,10 +97,9 @@ const Shell = () => {
       <main className="max-w-[1400px] mx-auto px-6 md:px-8 py-8">
         <Tabs value={tab} onValueChange={setTab} className="w-full">
           <TabsList data-testid="main-tabs" className="bg-transparent border-b border-white/10 rounded-none p-0 h-auto w-full justify-start gap-1 mb-8 overflow-x-auto">
-            <TabTrigger value="dashboard" icon={LayoutDashboard} label={t("tabs.dashboard")} />
+            <TabTrigger value="protocols" icon={ClipboardSignature} label={t("tabs.protocols")} />
             <TabTrigger value="vehicles" icon={Car} label={t("tabs.vehicles")} />
             <TabTrigger value="maintenance" icon={Wrench} label={t("tabs.maintenance")} />
-            <TabTrigger value="protocols" icon={ClipboardSignature} label={t("tabs.protocols")} />
             <TabTrigger value="drivers" icon={Users} label={t("tabs.drivers")} />
           </TabsList>
 
