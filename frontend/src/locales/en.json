@@ -17,6 +17,8 @@
     "theme": "Theme",
     "theme_dark": "Dark",
     "theme_light": "Light",
+    "reset_cache": "Reset cache & reload",
+    "reset_cache_done": "Cache cleared. Reloading…",
     "system_online": "SYSTEM ONLINE",
     "due": "due",
     "actions": "Actions",

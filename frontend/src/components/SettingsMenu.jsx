@@ -3,8 +3,9 @@ import { useTranslation } from "react-i18next";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { Settings, Check, Languages, Sun, Moon } from "lucide-react";
+import { Settings, Check, Languages, Sun, Moon, RotateCw } from "lucide-react";
 import { applyTheme, getStoredTheme } from "../lib/theme";
+import { toast } from "sonner";
 
 const LANGS = [
   { code: "en", label: "English", flag: "🇬🇧" },
@@ -16,12 +17,33 @@ const THEMES = [
   { code: "light", labelKey: "common.theme_light", icon: Sun },
 ];
 
+const resetAllCaches = async () => {
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if ("caches" in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map((n) => caches.delete(n)));
+    }
+  } catch (e) {
+    console.warn("cache reset failed", e);
+  }
+};
+
 export const SettingsMenu = () => {
   const { t, i18n } = useTranslation();
   const [theme, setTheme] = useState(getStoredTheme());
 
   const changeLang = (lng) => i18n.changeLanguage(lng);
   const changeTheme = (th) => { applyTheme(th); setTheme(th); };
+
+  const doReset = async () => {
+    toast.message(t("common.reset_cache_done"));
+    await resetAllCaches();
+    setTimeout(() => window.location.reload(true), 400);
+  };
 
   const currentLang = (i18n.resolvedLanguage || i18n.language || "en").slice(0, 2);
 
@@ -72,6 +94,16 @@ export const SettingsMenu = () => {
             </DropdownMenuItem>
           );
         })}
+
+        <DropdownMenuSeparator className="bg-white/10 mt-1" />
+        <DropdownMenuItem
+          onClick={doReset}
+          data-testid="reset-cache-btn"
+          className="cursor-pointer focus:bg-white/5 focus:text-white"
+        >
+          <RotateCw className="w-3.5 h-3.5 mr-2 text-amber-400" />
+          <span className="flex-1">{t("common.reset_cache")}</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

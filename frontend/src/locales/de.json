@@ -17,6 +17,8 @@
     "theme": "Erscheinungsbild",
     "theme_dark": "Dunkel",
     "theme_light": "Hell",
+    "reset_cache": "Cache leeren & neu laden",
+    "reset_cache_done": "Cache geleert. Wird neu geladen…",
     "system_online": "SYSTEM ONLINE",
     "due": "fällig",
     "actions": "Aktionen",
