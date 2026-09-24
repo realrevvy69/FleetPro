@@ -123,7 +123,7 @@ const Shell = () => {
 
       <footer className="border-t border-white/10 mt-16 py-6">
         <div className="max-w-[1400px] mx-auto px-6 md:px-8 text-xs text-zinc-600 font-mono uppercase tracking-[0.2em] flex justify-between">
-          <span>FleetPro v1.1</span>
+          <span>FleetPro v1.3</span>
           <span>{t("footer.tracked", { count: stats.total })}</span>
         </div>
       </footer>

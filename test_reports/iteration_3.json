@@ -1,0 +1,32 @@
+{
+  "summary": "FleetPro v1.3 regression complete. Backend: 16/16 pytest pass (12 previous + 4 new: handover with operator signature + notes persistence, vehicle extras template CRUD, DELETE active handover resets vehicle to parked, tolerated damage keeps status=parked). Frontend: all requested v1.3 flows verified via Playwright — default tab=protocols, exactly 4 tabs (Protocols/Vehicles/Service/Drivers, no Dashboard tab), logo-dashboard-btn opens dashboard with 4 stat cards (stat-total/on-road/damaged/maintenance), SettingsMenu shows lang-en/lang-de/theme-dark/theme-light/reset-cache-btn, theme-light adds html.light class and persists after reload, theme-dark reverts. Damage dialog: both radios present, default = not-tolerated (red border), selecting tolerated reveals damage-tolerated-confirm-checkbox. Handover form: driver-signature-pad + operator-signature-pad + handover-notes-input all present; selecting a vehicle reveals handover-linked-damages block. Protocols History: protocol-search-input + protocols-accordion + pdf-protocol-{id} + delete-protocol-{id} all present, PDF button opens lang dialog with pdf-lang-en-btn/pdf-lang-de-btn. Drivers tab: driver-edit-{id} and driver-delete-{id} visible without hover. PhotoCapture: clicking open-camera-btn renders <video> element with autoplay path (videoRef live-preview fix confirmed via DOM inspection — video element mounted before stream request). PWA: /sw.js and /manifest.json both return 200; index.html contains v1.3.0 cache-buster script.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Footer", "issues": ["Footer text still says 'FleetPro v1.1' while cache-buster is v1.3.0 — version string inconsistency, cosmetic only."]},
+      {"screen": "Header (carry-over from iter2)", "issues": ["Toast can briefly overlap PushButton label — cosmetic only, non-blocking."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "(Cosmetic) Update footer version string in /app/frontend/src/App.js from 'FleetPro v1.1' to 'FleetPro v1.3' to match the cache-buster CURRENT='v1.3.0'."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 732 lines — still borderline; consider splitting into routers (vehicles, drivers, protocols, damages, maintenance, push, exports, public) per iter2 note.",
+    "ProtocolsTab.jsx is now 686 lines with two large sub-components (HandoverForm, HistoryList) + ProtocolGroups; consider extracting into separate files for readability.",
+    "In DELETE /api/protocols/{id}, when deleting a return protocol we correctly reset the parent handover, but we do NOT restore the parent's vehicle status to on_road. Edge case (user deletes only the return record while wanting handover to become active again) — leaving as-is is arguably correct but worth documenting.",
+    "PhotoCapture useEffect start() attempts getUserMedia twice (env + fallback); on the fallback the outer try/catch will still surface NotAllowedError correctly. Video mounts before stream request thanks to the effect ordering and setVideoReady gate — v1.3 fix is sound.",
+    "Handover HistoryList opens Return dialog and PDF language dialog independently — both use max-h/overflow scroll for viewport safety. Good.",
+    "All endpoints continue to exclude _id, use UUIDs, Pydantic validation, and env-driven config — good."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% (all v1.3 flows)"},
+  "test_credentials": "N/A - no auth in app; /app/memory/test_credentials.md not required",
+  "seed_data_creation": "Added TEST_-prefixed vehicles/drivers/damages/protocols during backend pytest run. Some persists in DB (teardown best-effort on TEST_ brand vehicles only). One TESTUI_ driver from iter2 preserved.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "backend_test.py now has 16 tests covering v1.0+v1.1+v1.3 (added test_handover_with_operator_signature_and_notes, test_vehicle_extras_template, test_delete_active_handover_resets_vehicle, test_damage_tolerated_keeps_parked). Frontend Playwright confirmed: tabs order=protocols/vehicles/maintenance(Service)/drivers with data-testid tab-{value}; note the Service tab still uses data-testid='tab-maintenance' internally (label is 'Service' via i18n). Vehicle 'Service' tab uses value='maintenance' — worth remembering when writing selectors. Dashboard is not a TabsTrigger — only rendered via TabsContent value='dashboard' when logo clicked. Version string mismatch in footer only.",
+  "rca_of_the_issue": "N/A - no bugs found. Only a cosmetic version-string inconsistency (footer says v1.1, cache-buster says v1.3.0). Fix: update line 126 in /app/frontend/src/App.js."
+}

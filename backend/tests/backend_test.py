@@ -340,3 +340,83 @@ def test_delete_vehicle(session, created_ids):
     assert r.status_code == 200
     # Verify gone
     assert not any(x["id"] == vid for x in session.get(f"{API}/vehicles").json())
+
+
+
+# ===== v1.3: Handover with operator signature + notes =====
+def test_handover_with_operator_signature_and_notes(session):
+    r = session.post(f"{API}/vehicles", json={"brand": "TEST_SIG", "model": "Op", "license_plate": "TEST-SIG1", "mileage": 100})
+    vid = r.json()["id"]
+    sig = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+    r = session.post(f"{API}/protocols/handover", json={
+        "vehicle_id": vid, "driver_name": "TEST_OpDriver", "fuel_level": 60, "mileage": 200,
+        "extras": [], "signature_base64": sig,
+        "handover_signature_base64": sig, "notes": "TEST scratch on left door",
+    })
+    assert r.status_code == 200
+    p = r.json()
+    assert p["handover_signature_base64"] == sig
+    assert p["notes"] == "TEST scratch on left door"
+
+    # GET to verify persisted
+    r2 = session.get(f"{API}/protocols/{p['id']}")
+    assert r2.status_code == 200
+    assert r2.json()["handover_signature_base64"] == sig
+    assert r2.json()["notes"] == "TEST scratch on left door"
+
+
+# ===== v1.3: Vehicle extras template =====
+def test_vehicle_extras_template(session):
+    r = session.post(f"{API}/vehicles", json={
+        "brand": "TEST_EX", "model": "Extras", "license_plate": "TEST-EX1",
+        "extras": ["First aid", "Warning triangle", "Vest"]
+    })
+    assert r.status_code == 200
+    v = r.json()
+    assert v["extras"] == ["First aid", "Warning triangle", "Vest"]
+    vid = v["id"]
+
+    # Update extras
+    r = session.put(f"{API}/vehicles/{vid}", json={"extras": ["First aid"]})
+    assert r.status_code == 200
+    assert r.json()["extras"] == ["First aid"]
+
+    # Persist check via list
+    r = session.get(f"{API}/vehicles")
+    fetched = next(x for x in r.json() if x["id"] == vid)
+    assert fetched["extras"] == ["First aid"]
+
+
+# ===== v1.3: Protocol DELETE resets active handover =====
+def test_delete_active_handover_resets_vehicle(session):
+    r = session.post(f"{API}/vehicles", json={"brand": "TEST_DELP", "model": "H", "license_plate": "TEST-DELP1", "mileage": 100})
+    vid = r.json()["id"]
+    sig = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+    r = session.post(f"{API}/protocols/handover", json={
+        "vehicle_id": vid, "driver_name": "TEST_D", "fuel_level": 50, "mileage": 100,
+        "extras": [], "signature_base64": sig,
+    })
+    hid = r.json()["id"]
+    # Vehicle on_road
+    v = next(x for x in session.get(f"{API}/vehicles").json() if x["id"] == vid)
+    assert v["status"] == "on_road"
+    # Delete active handover
+    r = session.delete(f"{API}/protocols/{hid}")
+    assert r.status_code == 200
+    # Vehicle should be parked
+    v = next(x for x in session.get(f"{API}/vehicles").json() if x["id"] == vid)
+    assert v["status"] == "parked"
+    # Protocol gone
+    r = session.get(f"{API}/protocols/{hid}")
+    assert r.status_code == 404
+
+
+# ===== v1.3: Damage tolerated does NOT flip status =====
+def test_damage_tolerated_keeps_parked(session):
+    r = session.post(f"{API}/vehicles", json={"brand": "TEST_TOL", "model": "OK", "license_plate": "TEST-TOL1"})
+    vid = r.json()["id"]
+    r = session.post(f"{API}/damages", json={"vehicle_id": vid, "description": "TEST minor", "tolerated": True})
+    assert r.status_code == 200
+    assert r.json()["tolerated"] is True
+    v = next(x for x in session.get(f"{API}/vehicles").json() if x["id"] == vid)
+    assert v["status"] == "parked"
