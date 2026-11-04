@@ -2,7 +2,8 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
 import { Button } from "../ui/button";
-import { Clock, User, Trash2, Pencil, Plus, Sparkles, Bell, CheckCircle2, AlertTriangle, ClipboardSignature } from "lucide-react";
+import { Clock, User, Trash2, Pencil, Plus, Sparkles, Bell, CheckCircle2, AlertTriangle, ClipboardSignature, CalendarPlus } from "lucide-react";
+import { API } from "../../lib/api";
 import { TYPE_META } from "./eventTypes";
 
 export const DayEvents = ({ day, events, locale, conflicts, onAdd, onEdit, onDelete, onStartProtocol }) => {
@@ -61,10 +62,19 @@ const EventRow = ({ e, t, clash, onEdit, onDelete, onStartProtocol }) => {
       </div>
       {!e.auto && (
         <div className="flex flex-col gap-1">
+          <IcsLink e={e} t={t} />
           <Button size="sm" variant="ghost" onClick={() => onEdit(e)} data-testid={`calendar-event-edit-${e.id}`} className="h-7 w-7 p-0 text-zinc-400 hover:text-white" title={t("common.edit")}><Pencil className="w-3.5 h-3.5" /></Button>
           <Button size="sm" variant="ghost" onClick={() => onDelete(e)} data-testid={`calendar-event-delete-${e.id}`} className="h-7 w-7 p-0 text-zinc-400 hover:text-red-400 hover:bg-red-500/10" title={t("common.delete")}><Trash2 className="w-3.5 h-3.5" /></Button>
         </div>
       )}
+      {e.auto && <IcsLink e={e} t={t} />}
     </div>
   );
 };
+
+const IcsLink = ({ e, t }) => (
+  <a href={`${API}/calendar/events/${e.id}/ics`} download data-testid={`calendar-event-ics-${e.id}`} title={t("calendar.download_ics")}
+    className="h-7 w-7 flex items-center justify-center rounded-md text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors">
+    <CalendarPlus className="w-3.5 h-3.5" />
+  </a>
+);

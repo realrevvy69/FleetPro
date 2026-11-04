@@ -1,20 +1,26 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { eachDayOfInterval, format, isSameDay, isToday } from "date-fns";
+import { useDroppable } from "@dnd-kit/core";
 import { EventChip } from "./EventChip";
 
 const hourOf = (e) => Number(e.time.slice(0, 2));
 
-const Cell = ({ d, h, active, list, onSelect }) => (
-  <button
-    type="button"
-    onClick={() => onSelect(d)}
-    data-testid={`week-cell-${format(d, "yyyy-MM-dd")}-${h === null ? "none" : h}`}
-    className={`min-h-[36px] p-1 border-b border-r border-white/5 flex flex-col gap-0.5 text-left transition-colors ${active ? "bg-blue-600/10" : "hover:bg-white/5"}`}
-  >
-    {list.map((e) => <EventChip key={e.id} e={e} showTime={h !== null} />)}
-  </button>
-);
+const Cell = ({ d, h, active, list, onSelect }) => {
+  const key = format(d, "yyyy-MM-dd");
+  const { setNodeRef, isOver } = useDroppable({ id: `slot|${key}|${h === null ? "none" : h}` });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      onClick={() => onSelect(d)}
+      data-testid={`week-cell-${key}-${h === null ? "none" : h}`}
+      className={`min-h-[36px] p-1 border-b border-r border-white/5 flex flex-col gap-0.5 text-left transition-colors ${isOver ? "bg-blue-600/25 ring-1 ring-inset ring-blue-400" : active ? "bg-blue-600/10" : "hover:bg-white/5"}`}
+    >
+      {list.map((e) => <EventChip key={e.id} e={e} showTime={h !== null} />)}
+    </button>
+  );
+};
 
 export const WeekGrid = ({ range, selected, onSelect, events, locale }) => {
   const { t } = useTranslation();

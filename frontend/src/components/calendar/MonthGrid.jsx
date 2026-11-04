@@ -1,8 +1,39 @@
 import React from "react";
 import { eachDayOfInterval, format, isSameDay, isSameMonth, isToday } from "date-fns";
+import { useDroppable } from "@dnd-kit/core";
 import { AlertTriangle } from "lucide-react";
 import { TYPE_META } from "./eventTypes";
 import { EventChip } from "./EventChip";
+
+const DayCell = ({ d, month, active, list, clash, onSelect }) => {
+  const key = format(d, "yyyy-MM-dd");
+  const { setNodeRef, isOver } = useDroppable({ id: `day|${key}` });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      data-testid={`cal-day-${key}`}
+      onClick={() => onSelect(d)}
+      className={`min-h-[64px] md:min-h-[96px] p-1.5 md:p-2 text-left border-b border-r border-white/5 flex flex-col gap-1 transition-colors ${
+        isOver ? "bg-blue-600/25 ring-1 ring-inset ring-blue-400" : active ? "bg-blue-600/15 ring-1 ring-inset ring-blue-500" : "hover:bg-white/5"
+      } ${isSameMonth(d, month) ? "" : "opacity-35"}`}
+    >
+      <span className="flex items-center justify-between w-full">
+        <span className={`text-xs font-mono w-6 h-6 flex items-center justify-center rounded-full ${isToday(d) ? "bg-blue-600 text-white" : "text-zinc-300"}`}>
+          {format(d, "d")}
+        </span>
+        {clash && <AlertTriangle data-testid={`cal-conflict-${key}`} className="w-3.5 h-3.5 text-amber-400" />}
+      </span>
+      <div className="hidden md:flex flex-col gap-0.5 w-full">
+        {list.slice(0, 2).map((e) => <EventChip key={e.id} e={e} />)}
+        {list.length > 2 && <span className="text-[10px] text-zinc-500">+{list.length - 2}</span>}
+      </div>
+      <div className="flex md:hidden gap-0.5 flex-wrap">
+        {list.slice(0, 4).map((e) => <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${TYPE_META[e.type].dot}`} />)}
+      </div>
+    </button>
+  );
+};
 
 export const MonthGrid = ({ month, range, selected, onSelect, events, locale, conflicts }) => {
   const days = eachDayOfInterval(range);
@@ -19,34 +50,10 @@ export const MonthGrid = ({ month, range, selected, onSelect, events, locale, co
       </div>
       <div className="grid grid-cols-7">
         {days.map((d) => {
-          const key = format(d, "yyyy-MM-dd");
-          const list = byDate[key] || [];
-          const active = isSameDay(d, selected);
-          const clash = list.some((e) => conflicts.has(e.id));
+          const list = byDate[format(d, "yyyy-MM-dd")] || [];
           return (
-            <button
-              key={key}
-              type="button"
-              data-testid={`cal-day-${key}`}
-              onClick={() => onSelect(d)}
-              className={`min-h-[64px] md:min-h-[96px] p-1.5 md:p-2 text-left border-b border-r border-white/5 flex flex-col gap-1 transition-colors ${
-                active ? "bg-blue-600/15 ring-1 ring-inset ring-blue-500" : "hover:bg-white/5"
-              } ${isSameMonth(d, month) ? "" : "opacity-35"}`}
-            >
-              <span className="flex items-center justify-between w-full">
-                <span className={`text-xs font-mono w-6 h-6 flex items-center justify-center rounded-full ${isToday(d) ? "bg-blue-600 text-white" : "text-zinc-300"}`}>
-                  {format(d, "d")}
-                </span>
-                {clash && <AlertTriangle data-testid={`cal-conflict-${key}`} className="w-3.5 h-3.5 text-amber-400" />}
-              </span>
-              <div className="hidden md:flex flex-col gap-0.5 w-full">
-                {list.slice(0, 2).map((e) => <EventChip key={e.id} e={e} />)}
-                {list.length > 2 && <span className="text-[10px] text-zinc-500">+{list.length - 2}</span>}
-              </div>
-              <div className="flex md:hidden gap-0.5 flex-wrap">
-                {list.slice(0, 4).map((e) => <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${TYPE_META[e.type].dot}`} />)}
-              </div>
-            </button>
+            <DayCell key={d.toISOString()} d={d} month={month} active={isSameDay(d, selected)} list={list}
+              clash={list.some((e) => conflicts.has(e.id))} onSelect={onSelect} />
           );
         })}
       </div>

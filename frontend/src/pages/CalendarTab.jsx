@@ -1,18 +1,28 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { addMonths, addWeeks, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { Button } from "../components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Bell } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Bell, CalendarPlus, Move } from "lucide-react";
 import { MonthGrid } from "../components/calendar/MonthGrid";
 import { WeekGrid } from "../components/calendar/WeekGrid";
 import { DayEvents } from "../components/calendar/DayEvents";
 import { EventDialog } from "../components/calendar/EventDialog";
+import { SubscribeDialog } from "../components/calendar/SubscribeDialog";
+import { ChipView } from "../components/calendar/EventChip";
 import { TYPE_META, dateLocale, conflictIds } from "../components/calendar/eventTypes";
 
 const ymd = (d) => format(d, "yyyy-MM-dd");
 const WEEK = { weekStartsOn: 1 };
+
+const dropTarget = (e, overId) => {
+  const [kind, date, slot] = overId.split("|");
+  let time = e.time || null;
+  if (kind === "slot") time = slot === "none" ? null : `${slot.padStart(2, "0")}:${e.time ? e.time.slice(3) : "00"}`;
+  return { date, time };
+};
 
 export const CalendarTab = ({ vehicles, drivers, onStartProtocol }) => {
   const { t, i18n } = useTranslation();
@@ -22,6 +32,12 @@ export const CalendarTab = ({ vehicles, drivers, onStartProtocol }) => {
   const [selected, setSelected] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [dialog, setDialog] = useState(null);
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [dragging, setDragging] = useState(null);
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }),
+  );
 
   const range = useMemo(() => (view === "week"
     ? { start: startOfWeek(selected, WEEK), end: endOfWeek(selected, WEEK) }
@@ -50,6 +66,25 @@ export const CalendarTab = ({ vehicles, drivers, onStartProtocol }) => {
   };
 
   const conflicts = useMemo(() => conflictIds(events), [events]);
+
+  const onDragEnd = async ({ active, over }) => {
+    setDragging(null);
+    const e = active.data.current?.event;
+    if (!over || !e) return;
+    const { date, time } = dropTarget(e, String(over.id));
+    if (date === e.date && time === (e.time || null)) return;
+    const clash = events.some((x) => !x.auto && x.id !== e.id && x.vehicle_id === e.vehicle_id && x.date === date);
+    setEvents((evs) => evs.map((x) => (x.id === e.id ? { ...x, date, time } : x)));
+    setSelected(new Date(`${date}T00:00`));
+    try {
+      await api.put(`/calendar/events/${e.id}`, {
+        vehicle_id: e.vehicle_id, type: e.type, date, time, driver_name: e.driver_name || null,
+        notes: e.notes || null, remind_day_before: e.remind_day_before !== false,
+      });
+      clash ? toast.warning(t("calendar.moved_conflict")) : toast.success(t("calendar.moved"));
+    } catch { toast.error(t("common.failed")); }
+    load();
+  };
   const dayEvents = events.filter((e) => e.date === ymd(selected));
   const label = view === "week"
     ? `${t("calendar.week_short")} ${format(selected, "I", { locale })} · ${format(range.start, "d. MMM", { locale })} – ${format(range.end, "d. MMM yyyy", { locale })}`
@@ -71,6 +106,9 @@ export const CalendarTab = ({ vehicles, drivers, onStartProtocol }) => {
             <Button variant="outline" size="icon" onClick={() => go(1)} data-testid="calendar-next-month" className="bg-transparent border-white/10 h-9 w-9"><ChevronRight className="w-4 h-4" /></Button>
           </div>
           <Button variant="outline" onClick={goToday} data-testid="calendar-today-btn" className="bg-transparent border-white/10 h-9">{t("calendar.today")}</Button>
+          <Button variant="outline" onClick={() => setSubscribeOpen(true)} data-testid="calendar-subscribe-btn" className="bg-transparent border-white/10 h-9">
+            <CalendarPlus className="w-4 h-4 mr-2" /> {t("calendar.subscribe")}
+          </Button>
           <Button onClick={() => setDialog({ date: ymd(selected) })} data-testid="add-calendar-event-btn" className="bg-blue-600 hover:bg-blue-700 text-white blue-glow border border-blue-500/50 h-9">
             <Plus className="w-4 h-4 mr-2" /> {t("calendar.add_event")}
           </Button>
@@ -81,15 +119,22 @@ export const CalendarTab = ({ vehicles, drivers, onStartProtocol }) => {
         {Object.keys(TYPE_META).map((k) => (
           <span key={k} className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TYPE_META[k].dot}`} />{t(`calendar.types.${k}`)}</span>
         ))}
+        <span data-testid="calendar-drag-hint" className="flex items-center gap-1.5 text-zinc-500 md:ml-auto"><Move className="w-3 h-3" />{t("calendar.drag_hint")}</span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
-        {view === "week" ? <WeekGrid {...gridProps} /> : <MonthGrid month={month} {...gridProps} />}
-        <DayEvents day={selected} events={dayEvents} locale={locale} conflicts={conflicts} onAdd={() => setDialog({ date: ymd(selected) })}
-          onEdit={(e) => setDialog({ event: e })} onDelete={remove} onStartProtocol={onStartProtocol} />
-      </div>
+      <DndContext sensors={sensors} onDragStart={({ active }) => setDragging(active.data.current?.event)} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+          {view === "week" ? <WeekGrid {...gridProps} /> : <MonthGrid month={month} {...gridProps} />}
+          <DayEvents day={selected} events={dayEvents} locale={locale} conflicts={conflicts} onAdd={() => setDialog({ date: ymd(selected) })}
+            onEdit={(e) => setDialog({ event: e })} onDelete={remove} onStartProtocol={onStartProtocol} />
+        </div>
+        <DragOverlay dropAnimation={null}>
+          {dragging ? <ChipView e={dragging} className="shadow-lg shadow-blue-500/30 bg-[#141414] w-40" /> : null}
+        </DragOverlay>
+      </DndContext>
 
       <EventDialog state={dialog} onClose={() => setDialog(null)} vehicles={vehicles} drivers={drivers} onSaved={() => { setDialog(null); load(); }} />
+      <SubscribeDialog open={subscribeOpen} onOpenChange={setSubscribeOpen} />
     </div>
   );
 };

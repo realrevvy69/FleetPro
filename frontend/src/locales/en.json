@@ -286,6 +286,22 @@
     "no_open_handover": "No open handover found for this vehicle",
     "vehicle_on_road": "Vehicle is already on the road – record the return first",
     "from_calendar": "From calendar appointment on {{date}} – will be marked done after saving",
-    "return_from_calendar": "From calendar appointment – will be marked done after saving"
+    "return_from_calendar": "From calendar appointment – will be marked done after saving",
+    "moved": "Appointment moved",
+    "moved_conflict": "Appointment moved – note: vehicle is double-booked on this day",
+    "drag_hint": "Tip: drag appointments to another day or time",
+    "subscribe": "Calendar feed",
+    "subscribe_title": "Show in Outlook or Google Calendar",
+    "subscribe_desc": "Subscribe to this link – new and changed appointments appear automatically.",
+    "copy_link": "Copy",
+    "copied": "Link copied",
+    "add_google": "Add to Google Calendar",
+    "add_outlook": "Add to Outlook (web)",
+    "add_apple": "Open in Apple Calendar / Outlook desktop",
+    "reset_link": "Create new link (old link stops working)",
+    "reset_confirm": "Create a new link? Existing subscriptions with the old link will stop working.",
+    "reset_done": "New link created",
+    "subscribe_hint": "Anyone with this link can see the appointments – share internally only. Google and Outlook refresh subscriptions only every few hours.",
+    "download_ics": "Download as calendar file"
   }
 }

@@ -286,6 +286,22 @@
     "no_open_handover": "Keine offene Übergabe für dieses Fahrzeug gefunden",
     "vehicle_on_road": "Fahrzeug ist bereits unterwegs – bitte zuerst die Rückgabe erfassen",
     "from_calendar": "Aus Kalendertermin vom {{date}} – wird nach dem Speichern als erledigt markiert",
-    "return_from_calendar": "Aus Kalendertermin – wird nach dem Speichern als erledigt markiert"
+    "return_from_calendar": "Aus Kalendertermin – wird nach dem Speichern als erledigt markiert",
+    "moved": "Termin verschoben",
+    "moved_conflict": "Termin verschoben – Achtung, Fahrzeug ist an diesem Tag doppelt eingeplant",
+    "drag_hint": "Tipp: Termine per Ziehen auf einen anderen Tag oder eine andere Uhrzeit verschieben",
+    "subscribe": "Kalender-Abo",
+    "subscribe_title": "In Outlook oder Google Kalender anzeigen",
+    "subscribe_desc": "Abonniere diesen Link – neue und geänderte Termine erscheinen automatisch.",
+    "copy_link": "Kopieren",
+    "copied": "Link kopiert",
+    "add_google": "In Google Kalender hinzufügen",
+    "add_outlook": "In Outlook (Web) hinzufügen",
+    "add_apple": "Apple Kalender / Outlook Desktop öffnen",
+    "reset_link": "Neuen Link erzeugen (alter Link funktioniert dann nicht mehr)",
+    "reset_confirm": "Neuen Link erzeugen? Bestehende Abos mit dem alten Link hören auf zu funktionieren.",
+    "reset_done": "Neuer Link erzeugt",
+    "subscribe_hint": "Jeder mit diesem Link kann die Termine sehen – nur intern teilen. Google und Outlook aktualisieren Abos nur alle paar Stunden.",
+    "download_ics": "Als Kalenderdatei herunterladen"
   }
 }

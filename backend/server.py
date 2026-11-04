@@ -1,8 +1,9 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, BackgroundTasks
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, Response
 from pymongo.errors import DuplicateKeyError
 from zoneinfo import ZoneInfo
 import hmac
+import secrets
 import calendar as pycal
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -17,7 +18,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Literal, Any, Dict
 import uuid
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from pywebpush import webpush, WebPushException
 
 
@@ -830,6 +831,106 @@ async def delete_calendar_event(event_id: str):
     if res.deleted_count == 0:
         raise HTTPException(404, "Event not found")
     return {"ok": True}
+
+
+# ============ CALENDAR EXPORT (iCal) ============
+
+ICS_TZ = [
+    "BEGIN:VTIMEZONE", "TZID:Europe/Berlin",
+    "BEGIN:DAYLIGHT", "TZOFFSETFROM:+0100", "TZOFFSETTO:+0200", "TZNAME:CEST",
+    "DTSTART:19700329T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU", "END:DAYLIGHT",
+    "BEGIN:STANDARD", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "TZNAME:CET",
+    "DTSTART:19701025T030000", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU", "END:STANDARD",
+    "END:VTIMEZONE",
+]
+
+
+def _ics_text(s: str) -> str:
+    return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+def _ics_fold(line: str) -> str:
+    out, cur = [], ""
+    for ch in line:
+        if len((cur + ch).encode()) > 74:
+            out.append(cur)
+            cur = " " + ch
+        else:
+            cur += ch
+    out.append(cur)
+    return "\r\n".join(out)
+
+
+def _ics_vevent(i: Dict[str, Any], stamp: str) -> List[str]:
+    d = date.fromisoformat(i["date"])
+    if i.get("time"):
+        h, m = map(int, i["time"].split(":"))
+        start = datetime(d.year, d.month, d.day, h, m)
+        end = start + timedelta(hours=1)
+        when = [f"DTSTART;TZID=Europe/Berlin:{start:%Y%m%dT%H%M%S}", f"DTEND;TZID=Europe/Berlin:{end:%Y%m%dT%H%M%S}"]
+    else:
+        when = [f"DTSTART;VALUE=DATE:{d:%Y%m%d}", f"DTEND;VALUE=DATE:{d + timedelta(days=1):%Y%m%d}"]
+    desc = [f"Fahrer: {i['driver_name']}"] if i.get("driver_name") else []
+    if i.get("notes"):
+        desc.append(i["notes"])
+    if i.get("done"):
+        desc.append("Erledigt")
+    prefix = "✓ " if i.get("done") else ""
+    return [
+        "BEGIN:VEVENT", f"UID:{i['id']}@fleetpro", f"DTSTAMP:{stamp}", *when,
+        f"SUMMARY:{_ics_text(prefix + EVENT_LABELS_DE[i['type']] + ': ' + i['vehicle_label'])}",
+        f"DESCRIPTION:{_ics_text(chr(10).join(desc))}", "END:VEVENT",
+    ]
+
+
+def _ics_response(items: List[Dict[str, Any]], filename: str, inline: bool = False) -> Response:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//FleetPro//Kalender//DE", "CALSCALE:GREGORIAN",
+             "METHOD:PUBLISH", "X-WR-CALNAME:FleetPro", "X-WR-TIMEZONE:Europe/Berlin", *ICS_TZ]
+    for i in items:
+        lines += _ics_vevent(i, stamp)
+    lines.append("END:VCALENDAR")
+    body = "\r\n".join(_ics_fold(line) for line in lines) + "\r\n"
+    disp = "inline" if inline else "attachment"
+    return Response(body, media_type="text/calendar; charset=utf-8",
+                    headers={"Content-Disposition": f'{disp}; filename="{filename}"'})
+
+
+async def _feed_token(reset: bool = False) -> str:
+    doc = await db.settings.find_one({"key": "ical_token"})
+    if doc and not reset:
+        return doc["value"]
+    token = secrets.token_urlsafe(24)
+    await db.settings.update_one({"key": "ical_token"}, {"$set": {"value": token}}, upsert=True)
+    return token
+
+
+@api_router.get("/calendar/events/{event_id}/ics")
+async def calendar_event_ics(event_id: str):
+    items = [i for i in await _calendar_items(date(2000, 1, 1), date(2100, 1, 1)) if i["id"] == event_id]
+    if not items:
+        raise HTTPException(404, "Event not found")
+    return _ics_response(items, f"fleetpro-{items[0]['date']}.ics")
+
+
+@api_router.get("/calendar/feed-token")
+async def get_feed_token():
+    return {"token": await _feed_token()}
+
+
+@api_router.post("/calendar/feed-token/reset")
+async def reset_feed_token():
+    return {"token": await _feed_token(reset=True)}
+
+
+@api_router.get("/calendar/feed/{token}.ics")
+async def calendar_feed(token: str):
+    doc = await db.settings.find_one({"key": "ical_token"})
+    if not doc or not hmac.compare_digest(token.encode(), doc["value"].encode()):
+        raise HTTPException(404, "Not found")
+    today = datetime.now(BERLIN).date()
+    items = await _calendar_items(today - timedelta(days=180), today + timedelta(days=730))
+    return _ics_response(items, "fleetpro.ics", inline=True)
 
 
 async def _send_reminders(run_id: str, eve: bool):
