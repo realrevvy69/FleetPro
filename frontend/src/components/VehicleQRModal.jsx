@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -7,34 +7,43 @@ import {
 import { Button } from "./ui/button";
 import { Printer, QrCode } from "lucide-react";
 
+const PRINT_CSS = `
+  body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .plate { font-family: monospace; font-size: 16px; color: #555; margin-bottom: 16px; }
+  .qr { display: inline-block; padding: 16px; border: 2px solid #000; border-radius: 8px; }
+  .footer { margin-top: 16px; font-size: 11px; color: #555; }
+`;
+
+// Builds the print page with DOM APIs only (textContent), so vehicle data can never inject markup.
+const printQr = (vehicle, svg, hint) => {
+  const w = window.open("", "_blank");
+  if (!w || !svg) return;
+  const doc = w.document;
+  doc.title = `${vehicle.brand} ${vehicle.model} – ${vehicle.license_plate}`;
+  const style = doc.createElement("style");
+  style.textContent = PRINT_CSS;
+  doc.head.appendChild(style);
+  const add = (tag, cls, text) => {
+    const el = doc.createElement(tag);
+    if (cls) el.className = cls;
+    if (text) el.textContent = text;
+    doc.body.appendChild(el);
+    return el;
+  };
+  add("h1", "", `${vehicle.brand} ${vehicle.model}`);
+  add("div", "plate", vehicle.license_plate);
+  add("div", "qr").appendChild(doc.importNode(svg, true));
+  add("div", "footer", hint);
+  w.focus();
+  setTimeout(() => w.print(), 100);
+};
+
 export const VehicleQRModal = ({ vehicle, open, onOpenChange }) => {
   const { t } = useTranslation();
-  const url = `${window.location.origin}/handover/${vehicle?.id || ""}`;
-
-  const print = () => {
-    const w = window.open("", "_blank");
-    if (!w) return;
-    const svg = document.querySelector(`#qr-svg-${vehicle.id}`)?.outerHTML || "";
-    w.document.write(`
-      <html><head><title>${vehicle.brand} ${vehicle.model} – ${vehicle.license_plate}</title>
-      <style>
-        body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; }
-        h1 { font-size: 22px; margin: 0 0 4px; }
-        .plate { font-family: monospace; font-size: 16px; color: #555; margin-bottom: 16px; }
-        .qr { display: inline-block; padding: 16px; border: 2px solid #000; border-radius: 8px; }
-        .footer { margin-top: 16px; font-size: 11px; color: #555; }
-      </style></head><body>
-      <h1>${vehicle.brand} ${vehicle.model}</h1>
-      <div class="plate">${vehicle.license_plate}</div>
-      <div class="qr">${svg}</div>
-      <div class="footer">${t("qr.scan_hint")}</div>
-      <script>window.onload = () => window.print();</script>
-      </body></html>
-    `);
-    w.document.close();
-  };
-
   if (!vehicle) return null;
+  const url = `${window.location.origin}/handover/${vehicle.id}`;
+  const print = () => printQr(vehicle, document.getElementById(`qr-svg-${vehicle.id}`), t("qr.scan_hint"));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

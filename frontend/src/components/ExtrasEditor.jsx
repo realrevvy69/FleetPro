@@ -33,7 +33,7 @@ export const ExtrasEditor = ({ value = [], onChange, testId = "extras-editor" })
         )}
         {value.map((name, idx) => (
           <span
-            key={idx}
+            key={name}
             data-testid={`extra-tag-${idx}`}
             className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-xs font-mono border bg-blue-500/10 text-blue-300 border-blue-500/30"
           >

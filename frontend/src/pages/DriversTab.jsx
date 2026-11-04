@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { Button } from "../components/ui/button";
@@ -20,11 +20,11 @@ export const DriversTab = ({ onChange }) => {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try { setDrivers((await api.get("/drivers")).data); }
     catch { toast.error(t("common.failed")); }
-  };
-  useEffect(() => { load(); }, []);
+  }, [t]);
+  useEffect(() => { load(); }, [load]);
 
   const openCreate = () => { setEditing(null); setForm(empty); setOpen(true); };
   const openEdit = (d) => { setEditing(d); setForm({ name: d.name, phone: d.phone || "", company: d.company || "" }); setOpen(true); };

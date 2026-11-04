@@ -36,21 +36,36 @@ const Tag = ({ icon: Icon, className, children, testId }) => (
   <span data-testid={testId} className={`text-[10px] flex items-center gap-1 ${className}`}><Icon className="w-3 h-3" />{children}</span>
 );
 
+const EventTags = ({ e, t, clash }) => (
+  <div className="flex items-center gap-2 flex-wrap">
+    <span className={`text-xs font-semibold uppercase tracking-wider ${TYPE_META[e.type].text} ${e.done ? "line-through" : ""}`}>{t(`calendar.types.${e.type}`)}</span>
+    {e.time && <Tag icon={Clock} className="font-mono text-zinc-400 text-xs">{e.time}</Tag>}
+    {e.auto && <Tag icon={Sparkles} className="text-zinc-500">{t("calendar.auto")}</Tag>}
+    {e.done && <Tag icon={CheckCircle2} className="text-emerald-400" testId={`calendar-event-done-${e.id}`}>{t("calendar.done")}</Tag>}
+    {!e.auto && !e.done && e.remind_day_before && <Tag icon={Bell} className="text-zinc-500" testId={`calendar-event-eve-${e.id}`}>15:00</Tag>}
+    {clash && <Tag icon={AlertTriangle} className="text-amber-400" testId={`calendar-event-conflict-${e.id}`}>{t("calendar.conflict_badge")}</Tag>}
+  </div>
+);
+
+const EventActions = ({ e, t, onEdit, onDelete }) => (
+  <div className="flex flex-col gap-1">
+    <IcsLink e={e} t={t} />
+    {!e.auto && (
+      <>
+        <Button size="sm" variant="ghost" onClick={() => onEdit(e)} data-testid={`calendar-event-edit-${e.id}`} className="h-7 w-7 p-0 text-zinc-400 hover:text-white" title={t("common.edit")}><Pencil className="w-3.5 h-3.5" /></Button>
+        <Button size="sm" variant="ghost" onClick={() => onDelete(e)} data-testid={`calendar-event-delete-${e.id}`} className="h-7 w-7 p-0 text-zinc-400 hover:text-red-400 hover:bg-red-500/10" title={t("common.delete")}><Trash2 className="w-3.5 h-3.5" /></Button>
+      </>
+    )}
+  </div>
+);
+
 const EventRow = ({ e, t, clash, onEdit, onDelete, onStartProtocol }) => {
-  const meta = TYPE_META[e.type];
   const canStart = !e.auto && !e.done && (e.type === "handover" || e.type === "return");
   return (
     <div data-testid={`calendar-event-${e.id}`} className={`flex gap-3 p-3 rounded-md bg-[#0A0A0A] border ${clash ? "border-amber-500/50" : "border-white/10"} ${e.done ? "opacity-60" : ""}`}>
-      <span className={`w-1 rounded-full ${meta.dot}`} />
+      <span className={`w-1 rounded-full ${TYPE_META[e.type].dot}`} />
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs font-semibold uppercase tracking-wider ${meta.text} ${e.done ? "line-through" : ""}`}>{t(`calendar.types.${e.type}`)}</span>
-          {e.time && <Tag icon={Clock} className="font-mono text-zinc-400 text-xs">{e.time}</Tag>}
-          {e.auto && <Tag icon={Sparkles} className="text-zinc-500">{t("calendar.auto")}</Tag>}
-          {e.done && <Tag icon={CheckCircle2} className="text-emerald-400" testId={`calendar-event-done-${e.id}`}>{t("calendar.done")}</Tag>}
-          {!e.auto && !e.done && e.remind_day_before && <Tag icon={Bell} className="text-zinc-500" testId={`calendar-event-eve-${e.id}`}>15:00</Tag>}
-          {clash && <Tag icon={AlertTriangle} className="text-amber-400" testId={`calendar-event-conflict-${e.id}`}>{t("calendar.conflict_badge")}</Tag>}
-        </div>
+        <EventTags e={e} t={t} clash={clash} />
         <div className="text-sm mt-1 truncate">{e.vehicle_label}</div>
         {e.driver_name && <div className="text-xs text-zinc-400 mt-1 flex items-center gap-1"><User className="w-3 h-3" />{e.driver_name}</div>}
         {e.notes && <div className="text-xs text-zinc-500 mt-1 break-words">{e.notes}</div>}
@@ -60,14 +75,7 @@ const EventRow = ({ e, t, clash, onEdit, onDelete, onStartProtocol }) => {
           </Button>
         )}
       </div>
-      {!e.auto && (
-        <div className="flex flex-col gap-1">
-          <IcsLink e={e} t={t} />
-          <Button size="sm" variant="ghost" onClick={() => onEdit(e)} data-testid={`calendar-event-edit-${e.id}`} className="h-7 w-7 p-0 text-zinc-400 hover:text-white" title={t("common.edit")}><Pencil className="w-3.5 h-3.5" /></Button>
-          <Button size="sm" variant="ghost" onClick={() => onDelete(e)} data-testid={`calendar-event-delete-${e.id}`} className="h-7 w-7 p-0 text-zinc-400 hover:text-red-400 hover:bg-red-500/10" title={t("common.delete")}><Trash2 className="w-3.5 h-3.5" /></Button>
-        </div>
-      )}
-      {e.auto && <IcsLink e={e} t={t} />}
+      <EventActions e={e} t={t} onEdit={onEdit} onDelete={onDelete} />
     </div>
   );
 };

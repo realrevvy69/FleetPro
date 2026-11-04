@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useLatest } from "../lib/hooks";
 import { useTranslation } from "react-i18next";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -28,13 +29,14 @@ export const ProtocolsTab = ({ vehicles, drivers, onChange, intent: initialInten
   const [loaded, setLoaded] = useState(false);
   const [intent] = useState(initialIntent);
   const [sub, setSub] = useState(intent?.type === "return" ? "history" : "handover");
+  const intentDoneRef = useLatest(onIntentDone);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try { setProtocols((await api.get("/protocols")).data); setLoaded(true); }
     catch { toast.error(t("common.failed")); }
-  };
-  // eslint-disable-next-line
-  useEffect(() => { load(); if (initialIntent) onIntentDone?.(); }, []);
+  }, [t]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (intent) intentDoneRef.current?.(); }, [intent, intentDoneRef]);
 
   return (
     <Tabs value={sub} onValueChange={setSub} className="w-full">
@@ -92,15 +94,18 @@ const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
   const [form, setForm] = useState(() => prefillForm(intent, drivers));
   const [linkedDamages, setLinkedDamages] = useState([]);
   const available = vehicles.filter((v) => v.status !== "on_road");
+  const vehiclesRef = useLatest(vehicles);
+  const warnedRef = useRef(false);
 
   useEffect(() => {
-    if (intent && vehicles.find((v) => v.id === intent.vehicle_id)?.status === "on_road") toast.error(t("calendar.vehicle_on_road"), { id: "proto-intent" });
-    // eslint-disable-next-line
-  }, []);
+    if (!intent || warnedRef.current) return;
+    warnedRef.current = true;
+    if (vehiclesRef.current.find((v) => v.id === intent.vehicle_id)?.status === "on_road") toast.error(t("calendar.vehicle_on_road"), { id: "proto-intent" });
+  }, [intent, vehiclesRef, t]);
 
   useEffect(() => {
     if (form.vehicle_id) {
-      const v = vehicles.find((x) => x.id === form.vehicle_id);
+      const v = vehiclesRef.current.find((x) => x.id === form.vehicle_id);
       if (v) {
         setForm((f) => ({
           ...f,
@@ -115,8 +120,7 @@ const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
       setForm((f) => ({ ...f, extras: [] }));
       setLinkedDamages([]);
     }
-    // eslint-disable-next-line
-  }, [form.vehicle_id]);
+  }, [form.vehicle_id, vehiclesRef]);
 
   const onDriverChange = (id) => {
     if (id === "__custom__") {
@@ -133,8 +137,9 @@ const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
   });
   const removeExtra = (idx) => setForm((f) => ({ ...f, extras: f.extras.filter((_, i) => i !== idx) }));
   const addExtra = () => {
-    if (!form.newExtra.trim()) return;
-    setForm((f) => ({ ...f, extras: [...f.extras, { name: f.newExtra.trim(), present: true }], newExtra: "" }));
+    const name = form.newExtra.trim();
+    if (!name) return;
+    setForm((f) => ({ ...f, extras: f.extras.some((e) => e.name === name) ? f.extras : [...f.extras, { name, present: true }], newExtra: "" }));
   };
 
   const submit = async () => {
@@ -230,7 +235,7 @@ const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
           <Label className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{t("protocols.extras_checklist")}</Label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-md bg-[#0A0A0A] border border-white/10">
             {form.extras.map((e, idx) => (
-              <div key={idx} className="flex items-center justify-between gap-2 group">
+              <div key={e.name} className="flex items-center justify-between gap-2 group">
                 <label className="flex items-center gap-2 cursor-pointer flex-1" data-testid={`extra-${idx}`}>
                   <Checkbox checked={e.present} onCheckedChange={() => toggleExtra(idx)} className="border-white/30 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" />
                   <span className={`text-sm ${e.present ? "text-white" : "text-zinc-500 line-through"}`}>{e.name}</span>
@@ -354,13 +359,16 @@ const HistoryList = ({ protocols, vehicles, loaded, intent, onChanged }) => {
     });
   };
 
+  const openReturnRef = useLatest(openReturn);
+  const intentHandledRef = useRef(false);
+
   useEffect(() => {
-    if (!intent || !loaded) return;
+    if (!intent || !loaded || intentHandledRef.current) return;
+    intentHandledRef.current = true;
     const open = protocols.find((p) => p.vehicle_id === intent.vehicle_id && !p.returned);
-    if (open) openReturn(open, intent.id);
+    if (open) openReturnRef.current(open, intent.id);
     else toast.error(t("calendar.no_open_handover"), { id: "proto-intent" });
-    // eslint-disable-next-line
-  }, [loaded]);
+  }, [intent, loaded, protocols, openReturnRef, t]);
 
   const submitReturn = async () => {
     if (!retForm.signature_base64) return toast.error(t("protocols.validation_signature"));
@@ -469,7 +477,7 @@ const HistoryList = ({ protocols, vehicles, loaded, intent, onChanged }) => {
                 <Label className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{t("protocols.extras_verification")}</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-md bg-[#0A0A0A] border border-white/10">
                   {retForm.extras.map((e, idx) => (
-                    <label key={idx} className="flex items-center gap-2 cursor-pointer" data-testid={`return-extra-${idx}`}>
+                    <label key={e.name} className="flex items-center gap-2 cursor-pointer" data-testid={`return-extra-${idx}`}>
                       <Checkbox checked={e.present} onCheckedChange={() => toggleRetExtra(idx)} className="border-white/30 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" />
                       <span className={`text-sm ${e.present ? "text-white" : "text-zinc-500 line-through"}`}>{e.name}</span>
                     </label>
@@ -542,7 +550,7 @@ const HistoryList = ({ protocols, vehicles, loaded, intent, onChanged }) => {
                 <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1">{t("protocols.extras")}</div>
                 <div className="flex flex-wrap gap-1.5">
                   {viewing.extras.map((e, i) => (
-                    <span key={i} className={`px-2 py-0.5 text-xs rounded-sm border font-mono ${e.present ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-zinc-800/50 text-zinc-500 border-white/10 line-through"}`}>{e.name}</span>
+                    <span key={e.name} className={`px-2 py-0.5 text-xs rounded-sm border font-mono ${e.present ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-zinc-800/50 text-zinc-500 border-white/10 line-through"}`}>{e.name}</span>
                   ))}
                 </div>
               </div>

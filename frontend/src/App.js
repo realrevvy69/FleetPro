@@ -19,24 +19,16 @@ import { ensureServiceWorker } from "./lib/push";
 import { registerServiceWorker, unregisterStaleServiceWorker } from "./lib/sw";
 import { Car, Wrench, ClipboardSignature, Activity, Users, CalendarDays } from "lucide-react";
 
-const Shell = () => {
-  const { t } = useTranslation();
-  const [tab, setTab] = useState("protocols");
+const useFleetData = (t) => {
   const [vehicles, setVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [stats, setStats] = useState({ total: 0, on_road: 0, damaged: 0, maintenance: 0, parked: 0 });
   const [alerts, setAlerts] = useState([]);
-  const [protoIntent, setProtoIntent] = useState(null);
-  const [protoKey, setProtoKey] = useState(0);
-  const startProtocol = (e) => { setProtoIntent(e); setProtoKey(Date.now()); setTab("protocols"); };
 
   const refresh = useCallback(async () => {
     try {
       const [v, s, a, d] = await Promise.all([
-        api.get("/vehicles"),
-        api.get("/dashboard/stats"),
-        api.get("/maintenance/alerts"),
-        api.get("/drivers"),
+        api.get("/vehicles"), api.get("/dashboard/stats"), api.get("/maintenance/alerts"), api.get("/drivers"),
       ]);
       setVehicles(v.data);
       setStats(s.data);
@@ -55,48 +47,60 @@ const Shell = () => {
     ensureServiceWorker().catch(() => {});
   }, [refresh]);
 
-  const dueAlerts = alerts.filter((a) => a.due);
+  return { vehicles, drivers, stats, alerts, refresh };
+};
+
+const AppHeader = ({ t, dueCount, onLogo }) => (
+  <header className="border-b border-white/10 bg-[#0A0A0A]/95 backdrop-blur sticky top-0 z-30">
+    <div className="max-w-[1400px] mx-auto px-6 md:px-8 py-4 flex items-center justify-between gap-4">
+      <button type="button" onClick={onLogo} data-testid="logo-dashboard-btn" title={t("tabs.dashboard")}
+        className="flex items-center gap-3 outline-none focus:ring-1 focus:ring-blue-500 rounded-md p-1 -ml-1 hover:bg-white/5 transition-colors">
+        <div className="w-9 h-9 rounded-md bg-blue-600 flex items-center justify-center blue-glow">
+          <Car className="w-5 h-5 text-white" />
+        </div>
+        <div className="text-left">
+          <div className="font-heading font-bold text-xl tracking-tight leading-none">Fleet<span className="text-blue-500">Pro</span></div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 mt-0.5">Command Center</div>
+        </div>
+      </button>
+      <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-end">
+        <div className="hidden md:flex items-center gap-2 text-xs font-mono text-zinc-400">
+          <Activity className="w-3.5 h-3.5 text-emerald-400" />
+          {t("common.system_online")}
+        </div>
+        {dueCount > 0 && (
+          <div data-testid="header-alerts-badge" className="flex items-center gap-2 px-3 py-1 rounded-sm bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono">
+            <Wrench className="w-3 h-3" /> {dueCount} {t("common.due")}
+          </div>
+        )}
+        <PushButton />
+        <SettingsMenu />
+      </div>
+    </div>
+  </header>
+);
+
+const AppFooter = ({ t, total }) => (
+  <footer className="border-t border-white/10 mt-16 py-6">
+    <div className="max-w-[1400px] mx-auto px-6 md:px-8 text-xs text-zinc-600 font-mono uppercase tracking-[0.2em] flex justify-between">
+      <span>FleetPro v1.7</span>
+      <span>{t("footer.tracked", { count: total })}</span>
+    </div>
+  </footer>
+);
+
+const Shell = () => {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState("protocols");
+  const { vehicles, drivers, stats, alerts, refresh } = useFleetData(t);
+  const [protoIntent, setProtoIntent] = useState(null);
+  const [protoKey, setProtoKey] = useState(0);
+  const startProtocol = (e) => { setProtoIntent(e); setProtoKey(Date.now()); setTab("protocols"); };
 
   return (
     <div className="App min-h-screen bg-[#0A0A0A] text-white">
       <Toaster theme="dark" position="top-right" />
-
-      <header className="border-b border-white/10 bg-[#0A0A0A]/95 backdrop-blur sticky top-0 z-30">
-        <div className="max-w-[1400px] mx-auto px-6 md:px-8 py-4 flex items-center justify-between gap-4">
-          <button
-            type="button"
-            onClick={() => setTab("dashboard")}
-            data-testid="logo-dashboard-btn"
-            className="flex items-center gap-3 outline-none focus:ring-1 focus:ring-blue-500 rounded-md p-1 -ml-1 hover:bg-white/5 transition-colors"
-            title={t("tabs.dashboard")}
-          >
-            <div className="w-9 h-9 rounded-md bg-blue-600 flex items-center justify-center blue-glow">
-              <Car className="w-5 h-5 text-white" />
-            </div>
-            <div className="text-left">
-              <div className="font-heading font-bold text-xl tracking-tight leading-none">
-                Fleet<span className="text-blue-500">Pro</span>
-              </div>
-              <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500 mt-0.5">
-                Command Center
-              </div>
-            </div>
-          </button>
-          <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-end">
-            <div className="hidden md:flex items-center gap-2 text-xs font-mono text-zinc-400">
-              <Activity className="w-3.5 h-3.5 text-emerald-400" />
-              {t("common.system_online")}
-            </div>
-            {dueAlerts.length > 0 && (
-              <div data-testid="header-alerts-badge" className="flex items-center gap-2 px-3 py-1 rounded-sm bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono">
-                <Wrench className="w-3 h-3" /> {dueAlerts.length} {t("common.due")}
-              </div>
-            )}
-            <PushButton />
-            <SettingsMenu />
-          </div>
-        </div>
-      </header>
+      <AppHeader t={t} dueCount={alerts.filter((a) => a.due).length} onLogo={() => setTab("dashboard")} />
 
       <main className="max-w-[1400px] mx-auto px-6 md:px-8 py-8">
         <Tabs value={tab} onValueChange={setTab} className="w-full">
@@ -109,7 +113,7 @@ const Shell = () => {
           </TabsList>
 
           <TabsContent value="dashboard" className="mt-0">
-            <Dashboard stats={stats} vehicles={vehicles} alerts={alerts} onJump={(t) => setTab(t)} />
+            <Dashboard stats={stats} vehicles={vehicles} alerts={alerts} onJump={setTab} />
           </TabsContent>
           <TabsContent value="vehicles" className="mt-0">
             <VehiclesTab vehicles={vehicles} onChange={refresh} />
@@ -129,12 +133,7 @@ const Shell = () => {
         </Tabs>
       </main>
 
-      <footer className="border-t border-white/10 mt-16 py-6">
-        <div className="max-w-[1400px] mx-auto px-6 md:px-8 text-xs text-zinc-600 font-mono uppercase tracking-[0.2em] flex justify-between">
-          <span>FleetPro v1.6</span>
-          <span>{t("footer.tracked", { count: stats.total })}</span>
-        </div>
-      </footer>
+      <AppFooter t={t} total={stats.total} />
     </div>
   );
 };

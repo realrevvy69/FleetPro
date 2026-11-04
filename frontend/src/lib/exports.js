@@ -60,14 +60,8 @@ const fmtDate = (iso, locale) => {
   } catch { return iso; }
 };
 
-export const generateProtocolPDF = (handover, ret, vehicle, lang = "en") => {
-  const L = PDF_LABELS[lang] || PDF_LABELS.en;
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const W = doc.internal.pageSize.getWidth();
-  const margin = 40;
-  let y = margin;
-
-  // Header
+const drawHeader = (s) => {
+  const { doc, W, margin, L } = s;
   doc.setFillColor(10, 10, 10);
   doc.rect(0, 0, W, 70, "F");
   doc.setTextColor(255, 255, 255);
@@ -78,100 +72,104 @@ export const generateProtocolPDF = (handover, ret, vehicle, lang = "en") => {
   doc.setFont("helvetica", "normal");
   doc.setTextColor(180, 180, 180);
   doc.text(L.title, margin, 55);
-  y = 100;
+  s.y = 100;
+};
 
-  // Vehicle info
-  doc.setTextColor(0, 0, 0);
+const drawSectionTitle = (s, title, size, gap) => {
+  const { doc, W, margin } = s;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(L.vehicle, margin, y);
-  y += 6;
+  doc.setFontSize(size);
+  doc.text(title, margin, s.y);
+  s.y += 6;
+  doc.line(margin, s.y, W - margin, s.y);
+  s.y += gap;
+};
+
+const drawVehicle = (s, vehicle) => {
+  const { doc, margin, L } = s;
+  doc.setTextColor(0, 0, 0);
   doc.setLineWidth(0.5);
-  doc.line(margin, y, W - margin, y);
-  y += 18;
+  drawSectionTitle(s, L.vehicle, 14, 18);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   const vehicleLabel = vehicle ? `${vehicle.brand} ${vehicle.model}` : L.none;
   const plate = vehicle ? vehicle.license_plate : L.none;
-  doc.text(`${vehicleLabel}    •    ${L.plate}: ${plate}`, margin, y);
-  y += 24;
+  doc.text(`${vehicleLabel}    •    ${L.plate}: ${plate}`, margin, s.y);
+  s.y += 24;
+};
 
-  const renderProtocol = (title, p) => {
-    if (!p) return;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text(title, margin, y);
-    y += 6;
-    doc.line(margin, y, W - margin, y);
-    y += 16;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    const rows = [
-      [L.driver, p.driver_name],
-      [L.date, fmtDate(p.created_at, L.locale)],
-      [L.mileage, `${formatNumber(p.mileage)} km`],
-      [L.fuel, `${p.fuel_level}%`],
-    ];
-    rows.forEach(([k, v]) => {
-      doc.setTextColor(110, 110, 110);
-      doc.text(k, margin, y);
-      doc.setTextColor(0, 0, 0);
-      doc.text(String(v), margin + 110, y);
-      y += 14;
-    });
-
-    y += 4;
+const drawRows = (s, p) => {
+  const { doc, margin, L } = s;
+  const rows = [
+    [L.driver, p.driver_name],
+    [L.date, fmtDate(p.created_at, L.locale)],
+    [L.mileage, `${formatNumber(p.mileage)} km`],
+    [L.fuel, `${p.fuel_level}%`],
+  ];
+  rows.forEach(([k, v]) => {
     doc.setTextColor(110, 110, 110);
-    doc.text(L.extras, margin, y);
+    doc.text(k, margin, s.y);
     doc.setTextColor(0, 0, 0);
-    const extrasText = (p.extras || [])
-      .map((e) => `${e.present ? "[x]" : "[ ]"} ${e.name}`)
-      .join("    ");
-    const split = doc.splitTextToSize(extrasText || L.none, W - margin - 110);
-    doc.text(split, margin + 110, y);
-    y += split.length * 12 + 8;
+    doc.text(String(v), margin + 110, s.y);
+    s.y += 14;
+  });
+};
 
-    if (p.notes) {
-      doc.setTextColor(110, 110, 110);
-      doc.text(L.notes, margin, y);
-      doc.setTextColor(0, 0, 0);
-      const noteSplit = doc.splitTextToSize(p.notes, W - margin - 110);
-      doc.text(noteSplit, margin + 110, y);
-      y += noteSplit.length * 12 + 8;
-    }
+const drawWrapped = (s, label, text) => {
+  const { doc, W, margin } = s;
+  doc.setTextColor(110, 110, 110);
+  doc.text(label, margin, s.y);
+  doc.setTextColor(0, 0, 0);
+  const split = doc.splitTextToSize(text, W - margin - 110);
+  doc.text(split, margin + 110, s.y);
+  s.y += split.length * 12 + 8;
+};
 
-    // Signatures side-by-side
-    let sigY = y;
-    let drawnSig = false;
-    if (p.signature_base64) {
-      doc.setTextColor(110, 110, 110);
-      doc.text(L.signature_driver, margin, sigY);
-      try { doc.addImage(p.signature_base64, "PNG", margin, sigY + 6, 200, 60); } catch (e) {}
-      drawnSig = true;
-    }
-    if (p.handover_signature_base64) {
-      const x2 = margin + 240;
-      doc.setTextColor(110, 110, 110);
-      doc.text(L.signature_operator, x2, sigY);
-      try { doc.addImage(p.handover_signature_base64, "PNG", x2, sigY + 6, 200, 60); } catch (e) {}
-      drawnSig = true;
-    }
-    if (drawnSig) y = sigY + 80;
-    y += 14;
-    if (y > 720) { doc.addPage(); y = margin; }
-  };
+const drawSignature = (s, label, data, x) => {
+  const { doc } = s;
+  doc.setTextColor(110, 110, 110);
+  doc.text(label, x, s.y);
+  try { doc.addImage(data, "PNG", x, s.y + 6, 200, 60); } catch { /* skip unreadable image */ }
+};
 
-  renderProtocol(L.handover, handover);
-  if (ret) renderProtocol(L.return, ret);
+const drawSignatures = (s, p) => {
+  const { margin, L } = s;
+  if (p.signature_base64) drawSignature(s, L.signature_driver, p.signature_base64, margin);
+  if (p.handover_signature_base64) drawSignature(s, L.signature_operator, p.handover_signature_base64, margin + 240);
+  if (p.signature_base64 || p.handover_signature_base64) s.y += 80;
+};
 
+const drawProtocol = (s, title, p) => {
+  if (!p) return;
+  const { doc, margin, L } = s;
+  drawSectionTitle(s, title, 13, 16);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  drawRows(s, p);
+  s.y += 4;
+  const extrasText = (p.extras || []).map((e) => `${e.present ? "[x]" : "[ ]"} ${e.name}`).join("    ");
+  drawWrapped(s, L.extras, extrasText || L.none);
+  if (p.notes) drawWrapped(s, L.notes, p.notes);
+  drawSignatures(s, p);
+  s.y += 14;
+  if (s.y > 720) { doc.addPage(); s.y = margin; }
+};
+
+const drawFooter = (s) => {
+  const { doc, margin, L } = s;
   doc.setFontSize(8);
   doc.setTextColor(140, 140, 140);
-  doc.text(
-    `${L.generated} ${new Date().toLocaleString(L.locale)}`,
-    margin,
-    doc.internal.pageSize.getHeight() - 20
-  );
+  doc.text(`${L.generated} ${new Date().toLocaleString(L.locale)}`, margin, doc.internal.pageSize.getHeight() - 20);
+};
 
+export const generateProtocolPDF = (handover, ret, vehicle, lang = "en") => {
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const s = { doc, W: doc.internal.pageSize.getWidth(), margin: 40, y: 40, L: PDF_LABELS[lang] || PDF_LABELS.en };
+  drawHeader(s);
+  drawVehicle(s, vehicle);
+  drawProtocol(s, s.L.handover, handover);
+  if (ret) drawProtocol(s, s.L.return, ret);
+  drawFooter(s);
   const filename = `protocol_${(vehicle?.license_plate || "vehicle").replace(/\s+/g, "_")}_${handover.id.slice(0, 8)}_${lang}.pdf`;
   doc.save(filename);
 };

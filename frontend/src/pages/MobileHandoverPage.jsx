@@ -46,8 +46,9 @@ export default function MobileHandoverPage() {
     return { ...f, extras: arr };
   });
   const addExtra = () => {
-    if (!form.newExtra.trim()) return;
-    setForm((f) => ({ ...f, extras: [...f.extras, { name: f.newExtra.trim(), present: true }], newExtra: "" }));
+    const name = form.newExtra.trim();
+    if (!name) return;
+    setForm((f) => ({ ...f, extras: f.extras.some((e) => e.name === name) ? f.extras : [...f.extras, { name, present: true }], newExtra: "" }));
   };
   const removeExtra = (i) => setForm((f) => ({ ...f, extras: f.extras.filter((_, idx) => idx !== i) }));
 
@@ -124,7 +125,7 @@ export default function MobileHandoverPage() {
             <Label className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{t("protocols.extras_checklist")}</Label>
             <div className="grid grid-cols-1 gap-2 p-3 rounded-md bg-[#0A0A0A] border border-white/10">
               {form.extras.map((e, idx) => (
-                <div key={idx} className="flex items-center justify-between gap-2">
+                <div key={e.name} className="flex items-center justify-between gap-2">
                   <label className="flex items-center gap-2 cursor-pointer flex-1">
                     <Checkbox checked={e.present} onCheckedChange={() => toggleExtra(idx)} className="border-white/30 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" />
                     <span className={`text-sm ${e.present ? "text-white" : "text-zinc-500 line-through"}`}>{e.name}</span>

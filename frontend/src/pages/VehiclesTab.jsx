@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -202,11 +202,11 @@ const DamagesSection = ({ vehicles, onChange }) => {
     tolerated_confirm: false, tolerated: false,
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try { setDamages((await api.get("/damages")).data); }
     catch { toast.error(t("common.failed")); }
-  };
-  useEffect(() => { load(); }, []);
+  }, [t]);
+  useEffect(() => { load(); }, [load]);
 
   const openDialog = () => {
     setForm({ vehicle_id: "", description: "", photo_base64: "", tolerated_confirm: false, tolerated: false });

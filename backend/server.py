@@ -16,7 +16,7 @@ import asyncio
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional, Literal, Any, Dict
+from typing import List, Optional, Literal, Any, Dict, Tuple
 import uuid
 from datetime import datetime, timezone, date, timedelta
 from pywebpush import webpush, WebPushException
@@ -672,47 +672,49 @@ async def push_test():
 
 # ============ MAINTENANCE BACKGROUND TASK ============
 
+def _due_marker(s: Dict[str, Any], v: Dict[str, Any], now: datetime) -> Optional[str]:
+    if s["type"] == "mileage":
+        target = (s.get("last_done_mileage") or 0) + s["interval_value"]
+        return f"mileage:{target}" if v.get("mileage", 0) >= target else None
+    last_iso = s.get("last_done_date")
+    if not last_iso:
+        return None
+    last_dt = datetime.fromisoformat(last_iso)
+    months = (now.year - last_dt.year) * 12 + (now.month - last_dt.month)
+    return f"month:{last_iso}:{s['interval_value']}" if months >= s["interval_value"] else None
+
+
+async def _notify_due_once(s: Dict[str, Any], v: Dict[str, Any], marker: str):
+    if await db.maintenance_notifications.find_one({"schedule_id": s["id"], "marker": marker}):
+        return
+    await db.maintenance_notifications.insert_one({"schedule_id": s["id"], "marker": marker, "sent_at": now_iso()})
+    await _broadcast_push(
+        f"Maintenance Due: {s['name']}",
+        f"{v['brand']} {v['model']} ({v['license_plate']}) needs service.",
+        "/",
+    )
+
+
+async def _scan_maintenance_alerts():
+    schedules = await db.maintenance_schedules.find({}, {"_id": 0}).to_list(10000)
+    vehicles = {v["id"]: v for v in await db.vehicles.find({}, {"_id": 0}).to_list(10000)}
+    now = datetime.now(timezone.utc)
+    for s in schedules:
+        v = vehicles.get(s["vehicle_id"])
+        if not v:
+            continue
+        marker = _due_marker(s, v, now)
+        if marker:
+            await _notify_due_once(s, v, marker)
+
+
 async def _check_maintenance_alerts_loop():
     """Every 30 minutes scan for newly-due maintenance and push once per (schedule_id, due_period)."""
     while True:
         try:
-            schedules = await db.maintenance_schedules.find({}, {"_id": 0}).to_list(10000)
-            vehicles = {v["id"]: v for v in await db.vehicles.find({}, {"_id": 0}).to_list(10000)}
-            now = datetime.now(timezone.utc)
-            for s in schedules:
-                v = vehicles.get(s["vehicle_id"])
-                if not v:
-                    continue
-                due = False
-                marker = None
-                if s["type"] == "mileage":
-                    last = s.get("last_done_mileage") or 0
-                    if v.get("mileage", 0) >= last + s["interval_value"]:
-                        due = True
-                        marker = f"mileage:{last + s['interval_value']}"
-                else:
-                    last_iso = s.get("last_done_date")
-                    if last_iso:
-                        last_dt = datetime.fromisoformat(last_iso)
-                        months = (now.year - last_dt.year) * 12 + (now.month - last_dt.month)
-                        if months >= s["interval_value"]:
-                            due = True
-                            marker = f"month:{last_iso}:{s['interval_value']}"
-                if due and marker:
-                    notified = await db.maintenance_notifications.find_one({
-                        "schedule_id": s["id"], "marker": marker
-                    })
-                    if not notified:
-                        await db.maintenance_notifications.insert_one({
-                            "schedule_id": s["id"], "marker": marker, "sent_at": now_iso(),
-                        })
-                        await _broadcast_push(
-                            f"Maintenance Due: {s['name']}",
-                            f"{v['brand']} {v['model']} ({v['license_plate']}) needs service.",
-                            "/",
-                        )
-        except Exception as ex:
-            logging.exception(f"Maintenance loop error: {ex}")
+            await _scan_maintenance_alerts()
+        except Exception:
+            logging.exception("Maintenance loop error")
         await asyncio.sleep(1800)
 
 
@@ -765,34 +767,45 @@ def _vehicle_label(v: Optional[Dict[str, Any]]) -> str:
     return f"{v['brand']} {v['model']} ({v['license_plate']})" if v else "?"
 
 
-async def _calendar_items(start: date, end: date) -> List[Dict[str, Any]]:
-    vehicles = {v["id"]: v for v in await db.vehicles.find({}, {"_id": 0}).to_list(10000)}
-    items = []
+def _service_due_day(s: Dict[str, Any], v: Dict[str, Any], today: date) -> Optional[date]:
+    if s["type"] == "monthly" and s.get("last_done_date"):
+        try:
+            return _add_months(date.fromisoformat(s["last_done_date"][:10]), s["interval_value"])
+        except ValueError:
+            return None
+    if s["type"] == "mileage" and v.get("mileage", 0) >= (s.get("last_done_mileage") or 0) + s["interval_value"]:
+        return today
+    return None
+
+
+async def _manual_items(start: date, end: date, vehicles: Dict[str, Any]) -> List[Dict[str, Any]]:
     events = await db.calendar_events.find(
         {"date": {"$gte": start.isoformat(), "$lte": end.isoformat()}}, {"_id": 0}
     ).to_list(10000)
-    for e in events:
-        items.append({"done": False, "remind_day_before": True, **e, "vehicle_label": _vehicle_label(vehicles.get(e["vehicle_id"])), "auto": False})
+    return [
+        {"done": False, "remind_day_before": True, **e, "vehicle_label": _vehicle_label(vehicles.get(e["vehicle_id"])), "auto": False}
+        for e in events
+    ]
+
+
+async def _service_items(start: date, end: date, vehicles: Dict[str, Any]) -> List[Dict[str, Any]]:
     today = datetime.now(BERLIN).date()
+    items = []
     for s in await db.maintenance_schedules.find({}, {"_id": 0}).to_list(10000):
         v = vehicles.get(s["vehicle_id"])
-        if not v:
-            continue
-        due_day = None
-        if s["type"] == "monthly" and s.get("last_done_date"):
-            try:
-                due_day = _add_months(date.fromisoformat(s["last_done_date"][:10]), s["interval_value"])
-            except ValueError:
-                continue
-        elif s["type"] == "mileage":
-            if v.get("mileage", 0) >= (s.get("last_done_mileage") or 0) + s["interval_value"]:
-                due_day = today
+        due_day = _service_due_day(s, v, today) if v else None
         if due_day and start <= due_day <= end:
             items.append({
                 "id": f"service-{s['id']}", "vehicle_id": s["vehicle_id"], "type": "service",
                 "date": due_day.isoformat(), "time": None, "driver_name": None, "notes": s["name"],
                 "vehicle_label": _vehicle_label(v), "auto": True, "done": False, "remind_day_before": False,
             })
+    return items
+
+
+async def _calendar_items(start: date, end: date) -> List[Dict[str, Any]]:
+    vehicles = {v["id"]: v for v in await db.vehicles.find({}, {"_id": 0}).to_list(10000)}
+    items = await _manual_items(start, end, vehicles) + await _service_items(start, end, vehicles)
     items.sort(key=lambda i: (i["date"], i.get("time") or ""))
     return items
 
@@ -935,16 +948,30 @@ async def calendar_feed(token: str):
     return _ics_response(items, "fleetpro.ics", inline=True)
 
 
+def _reminder_text(i: Dict[str, Any], prefix: str) -> Tuple[str, str]:
+    when = f" um {i['time']} Uhr" if i.get("time") else ""
+    if i.get("driver_name"):
+        extra = f" – {i['driver_name']}"
+    elif i["auto"] and i.get("notes"):
+        extra = f" – {i['notes']}"
+    else:
+        extra = ""
+    return f"{prefix}: {EVENT_LABELS_DE[i['type']]}", f"{i['vehicle_label']}{when}{extra}"
+
+
+async def _reminder_items(day: date, eve: bool) -> List[Dict[str, Any]]:
+    items = await _calendar_items(day, day)
+    return [i for i in items if not i["done"] and (not eve or i["remind_day_before"])]
+
+
 async def _send_reminders(run_id: str, eve: bool):
     today = datetime.now(BERLIN).date()
-    day = date.fromordinal(today.toordinal() + 1) if eve else today
-    items = [i for i in await _calendar_items(day, day) if not i["done"] and (not eve or i["remind_day_before"])]
-    prefix = "Morgen" if eve else "Heute"
+    day = today + timedelta(days=1) if eve else today
+    items = await _reminder_items(day, eve)
     for i in items:
-        when = f" um {i['time']} Uhr" if i.get("time") else ""
-        extra = f" – {i['driver_name']}" if i.get("driver_name") else (f" – {i['notes']}" if i["auto"] and i.get("notes") else "")
+        title, body = _reminder_text(i, "Morgen" if eve else "Heute")
         try:
-            await _broadcast_push(f"{prefix}: {EVENT_LABELS_DE[i['type']]}", f"{i['vehicle_label']}{when}{extra}", "/")
+            await _broadcast_push(title, body, "/")
         except Exception:
             logging.exception("Reminder push failed")
     await db.cron_runs.update_one(

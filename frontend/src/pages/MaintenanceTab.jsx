@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -40,14 +40,14 @@ export const MaintenanceTab = ({ vehicles, alerts, onChange }) => {
   const [completionMileage, setCompletionMileage] = useState("");
   const [completionNotes, setCompletionNotes] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [s, h] = await Promise.all([api.get("/maintenance/schedules"), api.get("/maintenance/history")]);
       setSchedules(s.data);
       setHistory(h.data);
     } catch { toast.error(t("common.failed")); }
-  };
-  useEffect(() => { load(); }, []);
+  }, [t]);
+  useEffect(() => { load(); }, [load]);
 
   const submitSchedule = async () => {
     if (!form.vehicle_id || !form.name || !form.interval_value) return toast.error(t("maintenance.all_required"));
