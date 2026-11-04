@@ -51,7 +51,14 @@
     "no_dispatched": "Keine Fahrzeuge derzeit unterwegs.",
     "alerts": "Hinweise",
     "maintenance_notifications": "Wartungsbenachrichtigungen",
-    "no_schedules": "Noch keine Wartungspläne eingerichtet."
+    "no_schedules": "Noch keine Wartungspläne eingerichtet.",
+    "util_section": "Tatsächlich unterwegs",
+    "util_title": "Auslastung pro Fahrzeug",
+    "util_summary": "Ø {{avg}} % Auslastung · {{idle}} wenig genutzt (unter {{threshold}} %)",
+    "util_idle": "Wenig genutzt",
+    "util_days": "{{booked}} / {{period}} Tage",
+    "util_empty": "Noch keine Fahrzeuge",
+    "util_hint": "Gezählt werden Tage von der Übergabe bis zur Rückgabe laut Protokoll; offene Übergaben zählen bis heute. Im laufenden Monat nur bis heute."
   },
   "status": {
     "parked": "Geparkt",

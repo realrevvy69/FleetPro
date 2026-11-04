@@ -4,6 +4,7 @@ import { Card } from "../components/ui/card";
 import { Car, Activity, AlertTriangle, Wrench, ArrowRight, MapPin } from "lucide-react";
 import { StatusBadge } from "../components/StatusBadge";
 import { formatNumber } from "../lib/format";
+import { UtilizationCard } from "../components/dashboard/UtilizationCard";
 
 const StatCard = ({ icon: Icon, label, value, accent, testId, onClick }) => (
   <button
@@ -108,6 +109,8 @@ export const Dashboard = ({ stats, vehicles, alerts, onJump }) => {
           </div>
         </Card>
       </div>
+
+      <UtilizationCard />
     </div>
   );
 };

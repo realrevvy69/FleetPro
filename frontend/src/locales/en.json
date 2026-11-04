@@ -51,7 +51,14 @@
     "no_dispatched": "No vehicles currently dispatched.",
     "alerts": "Alerts",
     "maintenance_notifications": "Maintenance Notifications",
-    "no_schedules": "No maintenance schedules set up yet."
+    "no_schedules": "No maintenance schedules set up yet.",
+    "util_section": "Actually on the road",
+    "util_title": "Utilization per vehicle",
+    "util_summary": "Avg {{avg}} % utilization · {{idle}} rarely used (below {{threshold}} %)",
+    "util_idle": "Rarely used",
+    "util_days": "{{booked}} / {{period}} days",
+    "util_empty": "No vehicles yet",
+    "util_hint": "Counts days from handover to return according to protocols; open handovers count until today. Current month counts up to today."
   },
   "status": {
     "parked": "Parked",

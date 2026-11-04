@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { Eraser } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useLatest } from "../lib/hooks";
 
 const isLight = () => document.documentElement.classList.contains("light");
 
@@ -26,33 +27,65 @@ const setupCanvas = (canvas) => {
   ctx.lineJoin = "round";
 };
 
+const drawStrokes = (canvas, strokes) => {
+  const ctx = canvas.getContext("2d");
+  strokes.forEach((pts) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    pts.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+  });
+};
+
 const pointerPos = (canvas, e) => {
   const rect = canvas.getBoundingClientRect();
   const src = e.touches ? e.touches[0] : e;
   return { x: src.clientX - rect.left, y: src.clientY - rect.top };
 };
 
+// Repaints the canvas (keeping strokes) whenever the light/dark class on <html> flips.
+const useThemeRepaint = (canvasRef, strokesRef, onChangeRef) => {
+  useEffect(() => {
+    let light = isLight();
+    const observer = new MutationObserver(() => {
+      const canvas = canvasRef.current;
+      if (!canvas || isLight() === light) return;
+      light = isLight();
+      setupCanvas(canvas);
+      drawStrokes(canvas, strokesRef.current);
+      if (strokesRef.current.length) onChangeRef.current?.(canvas.toDataURL("image/png"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [canvasRef, strokesRef, onChangeRef]);
+};
+
 const useSignatureCanvas = (onChange) => {
-  const canvasRef = useRef(null);
+  const canvasRef = React.useRef(null);
+  const strokesRef = React.useRef([]);
+  const onChangeRef = useLatest(onChange);
   const [drawing, setDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
 
   useEffect(() => { if (canvasRef.current) setupCanvas(canvasRef.current); }, []);
+  useThemeRepaint(canvasRef, strokesRef, onChangeRef);
 
   const start = (e) => {
     e.preventDefault();
+    const pos = pointerPos(canvasRef.current, e);
+    strokesRef.current.push([pos]);
     const ctx = canvasRef.current.getContext("2d");
-    const { x, y } = pointerPos(canvasRef.current, e);
     ctx.beginPath();
-    ctx.moveTo(x, y);
+    ctx.moveTo(pos.x, pos.y);
     setDrawing(true);
   };
   const move = (e) => {
     if (!drawing) return;
     e.preventDefault();
+    const pos = pointerPos(canvasRef.current, e);
+    strokesRef.current[strokesRef.current.length - 1].push(pos);
     const ctx = canvasRef.current.getContext("2d");
-    const { x, y } = pointerPos(canvasRef.current, e);
-    ctx.lineTo(x, y);
+    ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
   };
   const end = () => {
@@ -62,6 +95,7 @@ const useSignatureCanvas = (onChange) => {
     onChange?.(canvasRef.current.toDataURL("image/png"));
   };
   const clear = () => {
+    strokesRef.current = [];
     paintBackground(canvasRef.current);
     setHasSignature(false);
     onChange?.("");

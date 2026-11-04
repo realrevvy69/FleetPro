@@ -810,6 +810,70 @@ async def _calendar_items(start: date, end: date) -> List[Dict[str, Any]]:
     return items
 
 
+# ============ UTILIZATION ============
+
+IDLE_PERCENT = 25
+
+
+def _berlin_day(iso: str) -> date:
+    return datetime.fromisoformat(iso).astimezone(BERLIN).date()
+
+
+async def _trip_ranges(today: date) -> List[Tuple[str, date, date]]:
+    handovers = await db.protocols.find(
+        {"type": "handover"}, {"_id": 0, "vehicle_id": 1, "created_at": 1, "return_protocol_id": 1}
+    ).to_list(100000)
+    ret_ids = [h["return_protocol_id"] for h in handovers if h.get("return_protocol_id")]
+    returns = {r["id"]: r["created_at"] for r in await db.protocols.find(
+        {"id": {"$in": ret_ids}}, {"_id": 0, "id": 1, "created_at": 1}
+    ).to_list(100000)}
+    out = []
+    for h in handovers:
+        end_iso = returns.get(h.get("return_protocol_id") or "")
+        out.append((h["vehicle_id"], _berlin_day(h["created_at"]), _berlin_day(end_iso) if end_iso else today))
+    return out
+
+
+def _booked_days(trips: List[Tuple[str, date, date]], first: date, last: date) -> Dict[str, set]:
+    booked: Dict[str, set] = {}
+    for vid, start, end in trips:
+        d = max(start, first)
+        while d <= min(end, last):
+            booked.setdefault(vid, set()).add(d.isoformat())
+            d += timedelta(days=1)
+    return booked
+
+
+@api_router.get("/dashboard/utilization")
+async def dashboard_utilization(month: str):
+    try:
+        y, m = map(int, month.split("-"))
+        first = date(y, m, 1)
+    except ValueError:
+        raise HTTPException(400, "Invalid month, expected YYYY-MM")
+    today = datetime.now(BERLIN).date()
+    if first > today:
+        raise HTTPException(400, "Month is in the future")
+    last = date(y, m, pycal.monthrange(y, m)[1])
+    period_end = min(last, today)
+    period = (period_end - first).days + 1
+    booked = _booked_days(await _trip_ranges(today), first, period_end)
+    rows = []
+    for v in await db.vehicles.find({}, {"_id": 0}).to_list(10000):
+        days = sorted(booked.get(v["id"], set()))
+        pct = round(100 * len(days) / period)
+        rows.append({
+            "vehicle_id": v["id"], "vehicle_label": _vehicle_label(v), "status": v["status"],
+            "booked_days": len(days), "days": days, "percent": pct, "idle": pct < IDLE_PERCENT,
+        })
+    rows.sort(key=lambda r: (r["percent"], r["vehicle_label"]))
+    return {
+        "month": f"{y:04d}-{m:02d}", "days_in_month": last.day, "period_days": period,
+        "average": round(sum(r["percent"] for r in rows) / len(rows)) if rows else 0,
+        "idle_count": sum(1 for r in rows if r["idle"]), "idle_threshold": IDLE_PERCENT, "vehicles": rows,
+    }
+
+
 @api_router.get("/calendar/events")
 async def list_calendar_events(start: str, end: str):
     try:
