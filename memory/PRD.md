@@ -31,6 +31,14 @@ Carpool Management App "FleetPro": black UI / white text / blue accents. Dashboa
 - **PWA**: manifest, icons (192/512), service worker (cache-first shell, network-first /api GET, write-queue + replay), `apple-mobile-web-app-*` meta tags, offline read for cached resources, queued writes.
 - **Capacitor scaffold**: `capacitor.config.ts` + `ANDROID_BUILD.md` documenting `yarn build → npx cap add android → cap sync → Android Studio APK`. WebView loads the production preview URL by default; can be flipped to bundled assets by removing the `server.url`.
 
+## v1.7 – Code-Review umgesetzt (2026-06)
+- Security: QR print no longer uses document.write (DOM + textContent; XSS-safe, verified with malicious vehicle name); popup-blocked toast.
+- Hooks: all exhaustive-deps issues fixed (useLatest helper in lib/hooks.js, useCallback loads); no eslint-disable left. Index keys replaced by extra names (adds dedupe).
+- Refactors (behaviour unchanged): PhotoCapture (useCameraStream + subcomponents), SignaturePad (useSignatureCanvas), exports.js (draw* helpers), EventDialog/DayEvents/CalendarTab (useCalendar.js hooks + CalendarHeader), App.js (useFleetData/AppHeader/AppFooter), ProtocolsTab split into pages/protocols/{HandoverForm,HistoryList,ProtocolGroups,shared}.jsx; backend maintenance loop/_calendar_items/_send_reminders split into helpers (pyright 0 errors).
+- Follow-up fixes: signature pads reset after handover, empty extras box hidden, Enter-to-add on mobile, light-mode white text on blue, no full refetch on language switch.
+- Tested: iteration_7 (56/56 backend, all UI) + iteration_8 (frontend 100%).
+- Remaining P2: move calendar/iCal/cron code out of server.py (~1050 lines) into a router module.
+
 ## v1.6 – Ziehen & Kalender-Export (2026-06)
 - Drag & drop (@dnd-kit, mouse + 250ms touch long-press, pointerWithin collision): week view → day + hour (minutes kept) or "Ohne Uhrzeit"; month view → day (time kept). Auto/done items not draggable. Conflict warning toast after drop.
 - iCal export: secret subscription feed `GET /api/calendar/feed/{token}.ics` (token in `settings` collection, `GET /api/calendar/feed-token`, `POST /api/calendar/feed-token/reset`), range today-180d..+730d incl. service items; per-event download `GET /api/calendar/events/{id}/ics`. Subscribe dialog with copy / Google / Outlook web / webcal links.

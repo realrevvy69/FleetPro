@@ -1,0 +1,29 @@
+{
+  "summary": "Frontend-only retest of the iteration 7 follow-up fixes and the ProtocolsTab split. All requested flows passed with no page errors (Playwright, desktop 1920x1080 and mobile 390x844). ProtocolsTab split, Protocols regression: selecting a vehicle prefills mileage and extras; linked damages show; a custom extra can be added with Enter or the + button, and duplicates are ignored; driver + operator signatures, notes and submit work. History: search (plate, driver, no-match), year/month accordion, view dialog (notes, extras, operator signature), PDF EN/DE download (protocol_<plate>_<id>_<lang>.pdf), CSV export, return flow with signature validation, delete protocol. Calendar 'start protocol' for handover (prefilled vehicle, driver, notes; banner shown) and return (return dialog with banner); both events marked Done. FIX signature reset: after submit, both pads show 'SIGN HERE' again and the canvases are blank (1 distinct colour). The vehicle select resets. A second handover without a new drawing is blocked with 'Signature required'. FIX empty extras box: hidden for vehicles with no extras in the handover form, the return dialog and the mobile page (empty:hidden, display none); shown when the vehicle has extras. FIX mobile /handover/:id: Enter adds the item, mobile-add-extra-btn works, duplicates are ignored (Enter, button, and an existing name 'Kabel'). FIX light theme: proto-tab-handover/history active pills, submit and Process Return buttons, calendar-view-month active, Add appointment, today marker and logo icon all compute to rgb(255,255,255) on rgb(37,99,235). FIX language switch: switching language triggers no /vehicles, /dashboard/stats, /maintenance/alerts or /drivers requests. Only the tab-level /calendar/events or /protocols request runs. FIX QR print: when window.open returns null, the toast appears in EN and DE. Normal print opens a popup and calls print(). The XSS vehicle's markup is rendered as text (0 img, 0 b elements, 0 alerts) and the QR SVG is present. Quick regression: Vehicles, Service, Drivers and Dashboard (via logo) load.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PDF language dialog (light theme)", "issues": ["Code review only, not verified in UI: pdf-lang-en/de buttons use hover:bg-blue-600 hover:text-white. In light mode, html.light .hover\\:text-white:hover forces #18181B, so hover shows dark text on blue. The light-mode white-on-blue override covers only .bg-blue-600 and not hover:bg-blue-600."]},
+      {"screen": "Main tab bar (light theme)", "issues": ["Inactive main tabs appear to show a faint grey bottom border segment under each tab in light mode (cosmetic, very minor)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/ui_seed_it7.py"],
+  "action_items": [
+    "Optional/LOW: add a light-mode override for hover:bg-blue-600 + hover:text-white, e.g. html.light .hover\\:bg-blue-600:hover { color:#fff !important }",
+    "Optional: remove the stale comment '// ===== Year > Month accordion grouping =====' at the end of pages/protocols/shared.jsx"
+  ],
+  "critical_code_review_comments": [
+    "The ProtocolsTab split is clean: shell is 45 lines and all sub-files are under 300 lines. Behaviour is unchanged.",
+    "HandoverForm: the vehicle Select onValueChange and several inputs use setForm({...form, ...}) (non-functional updates). This works today, but the functional setForm(f => ...) form would be safer and consistent with the signature callbacks.",
+    "MobileHandoverPage hides the empty extras box with Tailwind empty:hidden while HandoverForm/HistoryList use conditional rendering. Both work; the approach is inconsistent.",
+    "MobileHandoverPage defines its own Field component, duplicating protocols/shared.jsx Field. It could import the shared one."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend only)", "frontend": "100%"},
+  "seed_data_creation": "Used /app/backend/tests/ui_seed_it7.py plus one extra TEST_It8N no-extras vehicle and 2 TEST_ calendar events. All created vehicles, protocols and events were deleted by id afterwards; DB check confirms 0 TEST_ protocols, events and damages remain. Seed vehicles Y123456/Y098765 and the April protocols were untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 8 verified all follow-ups from iteration 7. Tips: driver select custom option = get_by_role('option').last; extras box selector '.grid.grid-cols-1.sm\\:grid-cols-2.gap-2'; signature blank check via getImageData distinct colours; QR print tested by wrapping window.open and stubbing w.print; tabpanel locators are ambiguous because of nested Tabs, so use main inner_text."
+}

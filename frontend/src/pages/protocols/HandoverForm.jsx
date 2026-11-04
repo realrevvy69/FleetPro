@@ -139,7 +139,7 @@ export const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
         )}
 
         <Field label={t("protocols.vehicle")}>
-          <Select value={form.vehicle_id} onValueChange={(v) => setForm({ ...form, vehicle_id: v, mileage: "" })}>
+          <Select value={form.vehicle_id} onValueChange={(v) => setForm((f) => ({ ...f, vehicle_id: v, mileage: "" }))}>
             <SelectTrigger data-testid="handover-vehicle-select" className="bg-[#0A0A0A] border-white/10">
               <SelectValue placeholder={t("protocols.selectVehicle")} />
             </SelectTrigger>
@@ -170,21 +170,21 @@ export const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
               <Input
                 data-testid="handover-driver-input"
                 value={form.driver_name}
-                onChange={(e) => setForm({ ...form, driver_name: e.target.value })}
+                onChange={(e) => setForm((f) => ({ ...f, driver_name: e.target.value }))}
                 className="bg-[#0A0A0A] border-white/10 mt-2"
                 placeholder={t("protocols.driver_name")}
               />
             )}
           </Field>
           <Field label={t("protocols.mileage")}>
-            <Input data-testid="handover-mileage-input" type="number" value={form.mileage} onChange={(e) => setForm({ ...form, mileage: e.target.value })} className="bg-[#0A0A0A] border-white/10 font-mono" />
+            <Input data-testid="handover-mileage-input" type="number" value={form.mileage} onChange={(e) => setForm((f) => ({ ...f, mileage: e.target.value }))} className="bg-[#0A0A0A] border-white/10 font-mono" />
           </Field>
         </div>
 
         <Field label={t("protocols.fuel_level", { percent: form.fuel_level })}>
           <div className="flex items-center gap-3 px-1">
             <Fuel className="w-4 h-4 text-zinc-500" />
-            <Slider data-testid="handover-fuel-slider" value={[form.fuel_level]} onValueChange={([v]) => setForm({ ...form, fuel_level: v })} min={0} max={100} step={5} className="flex-1" />
+            <Slider data-testid="handover-fuel-slider" value={[form.fuel_level]} onValueChange={([v]) => setForm((f) => ({ ...f, fuel_level: v }))} min={0} max={100} step={5} className="flex-1" />
             <span className="font-mono text-sm w-10 text-right">{form.fuel_level}%</span>
           </div>
         </Field>
@@ -205,7 +205,7 @@ export const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
             ))}
           </div>}
           <div className="flex gap-2">
-            <Input data-testid="new-extra-input" value={form.newExtra} onChange={(e) => setForm({ ...form, newExtra: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addExtra())} placeholder={t("protocols.add_custom")} className="bg-[#0A0A0A] border-white/10 flex-1" />
+            <Input data-testid="new-extra-input" value={form.newExtra} onChange={(e) => setForm((f) => ({ ...f, newExtra: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addExtra())} placeholder={t("protocols.add_custom")} className="bg-[#0A0A0A] border-white/10 flex-1" />
             <Button type="button" onClick={addExtra} variant="secondary" data-testid="add-extra-btn" className="bg-[#1A1A1A] hover:bg-[#252525] border border-white/10">
               <Plus className="w-4 h-4" />
             </Button>
@@ -249,7 +249,7 @@ export const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
           <Textarea
             data-testid="handover-notes-input"
             value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             placeholder={t("protocols.notes_placeholder")}
             className="bg-[#0A0A0A] border-white/10 min-h-[70px]"
           />

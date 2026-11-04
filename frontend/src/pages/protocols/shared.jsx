@@ -14,5 +14,3 @@ export const Field = ({ label, children }) => (
     {children}
   </div>
 );
-
-// ===== Year > Month accordion grouping =====
