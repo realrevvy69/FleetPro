@@ -146,6 +146,7 @@ class HandoverCreate(BaseModel):
     signature_base64: str
     handover_signature_base64: Optional[str] = None
     notes: Optional[str] = None
+    calendar_event_id: Optional[str] = None
 
 
 class ReturnCreate(BaseModel):
@@ -157,6 +158,7 @@ class ReturnCreate(BaseModel):
     signature_base64: str
     handover_signature_base64: Optional[str] = None
     notes: Optional[str] = None
+    calendar_event_id: Optional[str] = None
 
 
 class Protocol(BaseModel):
@@ -412,6 +414,7 @@ async def create_handover(payload: HandoverCreate):
         {"id": payload.vehicle_id},
         {"$set": {"status": "on_road", "mileage": payload.mileage}},
     )
+    await _mark_event_done(payload.calendar_event_id, p.id)
     return p
 
 
@@ -442,6 +445,7 @@ async def create_return(payload: ReturnCreate):
         {"id": handover["vehicle_id"]},
         {"$set": {"status": "parked", "mileage": payload.mileage}},
     )
+    await _mark_event_done(payload.calendar_event_id, rp.id)
     return rp
 
 
@@ -724,6 +728,7 @@ class CalendarEventCreate(BaseModel):
     time: Optional[str] = Field(default=None, pattern=TIME_PATTERN)
     driver_name: Optional[str] = None
     notes: Optional[str] = None
+    remind_day_before: bool = True
 
     @field_validator("date")
     @classmethod
@@ -734,7 +739,14 @@ class CalendarEventCreate(BaseModel):
 
 class CalendarEvent(CalendarEventCreate):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    done: bool = False
+    protocol_id: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
+
+
+async def _mark_event_done(event_id: Optional[str], protocol_id: str):
+    if event_id:
+        await db.calendar_events.update_one({"id": event_id}, {"$set": {"done": True, "protocol_id": protocol_id}})
 
 
 def _add_months(d: date, months: int) -> date:
@@ -755,7 +767,7 @@ async def _calendar_items(start: date, end: date) -> List[Dict[str, Any]]:
         {"date": {"$gte": start.isoformat(), "$lte": end.isoformat()}}, {"_id": 0}
     ).to_list(10000)
     for e in events:
-        items.append({**e, "vehicle_label": _vehicle_label(vehicles.get(e["vehicle_id"])), "auto": False})
+        items.append({"done": False, "remind_day_before": True, **e, "vehicle_label": _vehicle_label(vehicles.get(e["vehicle_id"])), "auto": False})
     today = datetime.now(BERLIN).date()
     for s in await db.maintenance_schedules.find({}, {"_id": 0}).to_list(10000):
         v = vehicles.get(s["vehicle_id"])
@@ -774,7 +786,7 @@ async def _calendar_items(start: date, end: date) -> List[Dict[str, Any]]:
             items.append({
                 "id": f"service-{s['id']}", "vehicle_id": s["vehicle_id"], "type": "service",
                 "date": due_day.isoformat(), "time": None, "driver_name": None, "notes": s["name"],
-                "vehicle_label": _vehicle_label(v), "auto": True,
+                "vehicle_label": _vehicle_label(v), "auto": True, "done": False, "remind_day_before": False,
             })
     items.sort(key=lambda i: (i["date"], i.get("time") or ""))
     return items
@@ -816,29 +828,25 @@ async def delete_calendar_event(event_id: str):
     return {"ok": True}
 
 
-async def _send_daily_reminders(run_id: str):
+async def _send_reminders(run_id: str, eve: bool):
     today = datetime.now(BERLIN).date()
-    items = await _calendar_items(today, today)
+    day = date.fromordinal(today.toordinal() + 1) if eve else today
+    items = [i for i in await _calendar_items(day, day) if not i["done"] and (not eve or i["remind_day_before"])]
+    prefix = "Morgen" if eve else "Heute"
     for i in items:
         when = f" um {i['time']} Uhr" if i.get("time") else ""
         extra = f" – {i['driver_name']}" if i.get("driver_name") else (f" – {i['notes']}" if i["auto"] and i.get("notes") else "")
         try:
-            await _broadcast_push(
-                f"Heute: {EVENT_LABELS_DE[i['type']]}",
-                f"{i['vehicle_label']}{when}{extra}",
-                "/",
-            )
+            await _broadcast_push(f"{prefix}: {EVENT_LABELS_DE[i['type']]}", f"{i['vehicle_label']}{when}{extra}", "/")
         except Exception:
-            logging.exception("Daily reminder push failed")
+            logging.exception("Reminder push failed")
     await db.cron_runs.update_one(
         {"run_id": run_id},
-        {"$set": {"date": today.isoformat(), "sent": len(items), "finished_at": now_iso()}},
+        {"$set": {"kind": "eve" if eve else "daily", "date": day.isoformat(), "sent": len(items), "finished_at": now_iso()}},
     )
 
 
-@api_router.post("/cron/daily-reminders", status_code=202)
-async def cron_daily_reminders(request: Request, background_tasks: BackgroundTasks):
-    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+async def _accept_cron(request: Request, background_tasks: BackgroundTasks, eve: bool):
     auth = request.headers.get("authorization", "")
     token = auth[7:] if auth.startswith("Bearer ") else ""
     if not token or not hmac.compare_digest(token.encode(), CRON_SECRET.encode()):
@@ -856,8 +864,20 @@ async def cron_daily_reminders(request: Request, background_tasks: BackgroundTas
         await db.cron_runs.insert_one({"run_id": run_id, "received_at": now_iso()})
     except DuplicateKeyError:
         return {"accepted": True, "duplicate": True}
-    background_tasks.add_task(_send_daily_reminders, run_id)
+    background_tasks.add_task(_send_reminders, run_id, eve)
     return {"accepted": True}
+
+
+@api_router.post("/cron/daily-reminders", status_code=202)
+async def cron_daily_reminders(request: Request, background_tasks: BackgroundTasks):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    return await _accept_cron(request, background_tasks, eve=False)
+
+
+@api_router.post("/cron/eve-reminders", status_code=202)
+async def cron_eve_reminders(request: Request, background_tasks: BackgroundTasks):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    return await _accept_cron(request, background_tasks, eve=True)
 
 
 # ============ MOBILE HANDOVER (PUBLIC LITE INFO) ============

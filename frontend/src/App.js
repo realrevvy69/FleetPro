@@ -26,6 +26,9 @@ const Shell = () => {
   const [drivers, setDrivers] = useState([]);
   const [stats, setStats] = useState({ total: 0, on_road: 0, damaged: 0, maintenance: 0, parked: 0 });
   const [alerts, setAlerts] = useState([]);
+  const [protoIntent, setProtoIntent] = useState(null);
+  const [protoKey, setProtoKey] = useState(0);
+  const startProtocol = (e) => { setProtoIntent(e); setProtoKey(Date.now()); setTab("protocols"); };
 
   const refresh = useCallback(async () => {
     try {
@@ -115,10 +118,10 @@ const Shell = () => {
             <MaintenanceTab vehicles={vehicles} alerts={alerts} onChange={refresh} />
           </TabsContent>
           <TabsContent value="protocols" className="mt-0">
-            <ProtocolsTab vehicles={vehicles} drivers={drivers} onChange={refresh} />
+            <ProtocolsTab key={protoKey} vehicles={vehicles} drivers={drivers} onChange={refresh} intent={protoIntent} onIntentDone={() => setProtoIntent(null)} />
           </TabsContent>
           <TabsContent value="calendar" className="mt-0">
-            <CalendarTab vehicles={vehicles} drivers={drivers} />
+            <CalendarTab vehicles={vehicles} drivers={drivers} onStartProtocol={startProtocol} />
           </TabsContent>
           <TabsContent value="drivers" className="mt-0">
             <DriversTab onChange={refresh} />
@@ -128,7 +131,7 @@ const Shell = () => {
 
       <footer className="border-t border-white/10 mt-16 py-6">
         <div className="max-w-[1400px] mx-auto px-6 md:px-8 text-xs text-zinc-600 font-mono uppercase tracking-[0.2em] flex justify-between">
-          <span>FleetPro v1.4</span>
+          <span>FleetPro v1.5</span>
           <span>{t("footer.tracked", { count: stats.total })}</span>
         </div>
       </footer>

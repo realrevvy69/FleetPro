@@ -245,7 +245,7 @@
   },
   "calendar": {
     "title": "Kalender",
-    "subtitle": "Am Termin-Tag kommt um 8:00 Uhr eine Push-Erinnerung",
+    "subtitle": "Push-Erinnerung um 8:00 Uhr am Termin-Tag, auf Wunsch auch am Vortag um 15:00 Uhr",
     "add_event": "Termin hinzufügen",
     "edit_event": "Termin bearbeiten",
     "dialog_description": "Plane eine Übergabe, Rückgabe oder einen Pool-Abgang.",
@@ -270,6 +270,19 @@
       "return": "Rückgabe",
       "pool_exit": "Verlässt den Pool",
       "service": "Service fällig"
-    }
+    },
+    "view_month": "Monat",
+    "view_week": "Woche",
+    "week_short": "KW",
+    "all_day": "Ohne Uhrzeit",
+    "remind_day_before": "Erinnerung am Vortag um 15:00 Uhr",
+    "start_protocol": "Protokoll starten",
+    "done": "Erledigt",
+    "conflict_warning": "Dieses Fahrzeug ist an diesem Tag bereits eingeplant:",
+    "conflict_badge": "Doppelt belegt",
+    "saved_with_conflict": "Gespeichert – Achtung, Fahrzeug ist an diesem Tag doppelt eingeplant",
+    "no_open_handover": "Keine offene Übergabe für dieses Fahrzeug gefunden",
+    "vehicle_on_road": "Fahrzeug ist bereits unterwegs – bitte zuerst die Rückgabe erfassen",
+    "from_calendar": "Aus Kalendertermin vom {{date}} – wird nach dem Speichern als erledigt markiert"
   }
 }

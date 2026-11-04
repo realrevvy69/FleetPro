@@ -10,3 +10,10 @@ export const TYPE_META = {
 };
 
 export const dateLocale = (lang) => (lang?.startsWith("de") ? de : enUS);
+
+export const conflictIds = (events) => {
+  const counts = {};
+  const manual = events.filter((e) => !e.auto);
+  manual.forEach((e) => { const k = `${e.date}|${e.vehicle_id}`; counts[k] = (counts[k] || 0) + 1; });
+  return new Set(manual.filter((e) => counts[`${e.date}|${e.vehicle_id}`] > 1).map((e) => e.id));
+};

@@ -8,9 +8,11 @@ import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Checkbox } from "../ui/checkbox";
+import { AlertTriangle } from "lucide-react";
 import { EVENT_TYPES } from "./eventTypes";
 
-const blank = (date) => ({ type: "handover", vehicle_id: "", date, time: "", driver_name: "", notes: "" });
+const blank = (date) => ({ type: "handover", vehicle_id: "", date, time: "", driver_name: "", notes: "", remind_day_before: true });
 
 export const EventDialog = ({ state, onClose, vehicles, drivers, onSaved }) => {
   const { t } = useTranslation();
@@ -20,8 +22,10 @@ export const EventDialog = ({ state, onClose, vehicles, drivers, onSaved }) => {
   useEffect(() => {
     if (!state) return;
     const e = state.event;
-    setForm(e ? { type: e.type, vehicle_id: e.vehicle_id, date: e.date, time: e.time || "", driver_name: e.driver_name || "", notes: e.notes || "" } : blank(state.date));
+    setForm(e ? { type: e.type, vehicle_id: e.vehicle_id, date: e.date, time: e.time || "", driver_name: e.driver_name || "", notes: e.notes || "", remind_day_before: e.remind_day_before !== false } : blank(state.date));
   }, [state]);
+
+  const clashes = useClashes(form.vehicle_id, form.date, editing?.id);
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -32,7 +36,8 @@ export const EventDialog = ({ state, onClose, vehicles, drivers, onSaved }) => {
     try {
       if (editing) await api.put(`/calendar/events/${editing.id}`, payload);
       else await api.post("/calendar/events", payload);
-      toast.success(t(editing ? "calendar.updated" : "calendar.added"));
+      if (clashes.length) toast.warning(t("calendar.saved_with_conflict"));
+      else toast.success(t(editing ? "calendar.updated" : "calendar.added"));
       onSaved();
     } catch { toast.error(t("common.failed")); }
   };
@@ -65,6 +70,12 @@ export const EventDialog = ({ state, onClose, vehicles, drivers, onSaved }) => {
             <Field label={t("calendar.date")}><Input type="date" data-testid="calendar-date-input" value={form.date} onChange={(e) => set("date")(e.target.value)} className="bg-[#0A0A0A] border-white/10" /></Field>
             <Field label={t("calendar.time")}><Input type="time" data-testid="calendar-time-input" value={form.time} onChange={(e) => set("time")(e.target.value)} className="bg-[#0A0A0A] border-white/10" /></Field>
           </div>
+          {clashes.length > 0 && (
+            <div data-testid="calendar-conflict-warning" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-400 space-y-1">
+              <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="w-3.5 h-3.5" />{t("calendar.conflict_warning")}</div>
+              {clashes.map((c) => <div key={c.id}>• {t(`calendar.types.${c.type}`)}{c.time ? ` ${c.time}` : ""}{c.driver_name ? ` – ${c.driver_name}` : ""}</div>)}
+            </div>
+          )}
           <Field label={t("calendar.driver")}>
             <Input list="calendar-driver-list" data-testid="calendar-driver-input" value={form.driver_name} onChange={(e) => set("driver_name")(e.target.value)} className="bg-[#0A0A0A] border-white/10" placeholder={t("calendar.driver_placeholder")} />
             <datalist id="calendar-driver-list">{drivers.map((d) => <option key={d.id} value={d.name} />)}</datalist>
@@ -72,6 +83,10 @@ export const EventDialog = ({ state, onClose, vehicles, drivers, onSaved }) => {
           <Field label={t("calendar.notes")}>
             <Textarea data-testid="calendar-notes-input" value={form.notes} onChange={(e) => set("notes")(e.target.value)} className="bg-[#0A0A0A] border-white/10 min-h-[70px]" />
           </Field>
+          <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+            <Checkbox data-testid="calendar-remind-checkbox" checked={form.remind_day_before} onCheckedChange={(v) => set("remind_day_before")(!!v)} />
+            {t("calendar.remind_day_before")}
+          </label>
         </div>
         <DialogFooter>
           <Button onClick={submit} data-testid="calendar-event-submit-btn" className="bg-blue-600 hover:bg-blue-700 text-white">{t("common.save")}</Button>
@@ -87,3 +102,16 @@ const Field = ({ label, children }) => (
     {children}
   </div>
 );
+
+const useClashes = (vehicleId, day, excludeId) => {
+  const [list, setList] = useState([]);
+  useEffect(() => {
+    if (!vehicleId || !day) { setList([]); return undefined; }
+    let live = true;
+    api.get("/calendar/events", { params: { start: day, end: day } })
+      .then((r) => live && setList(r.data.filter((e) => !e.auto && e.vehicle_id === vehicleId && e.id !== excludeId)))
+      .catch(() => live && setList([]));
+    return () => { live = false; };
+  }, [vehicleId, day, excludeId]);
+  return list;
+};

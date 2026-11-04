@@ -7,3 +7,11 @@ crons:
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
+  - name: eve-reminders
+    description: "Sends push reminders at 15:00 Berlin time for tomorrow's appointments marked for day-before reminder"
+    cron: "0 15 * * *"
+    timezone: "Europe/Berlin"
+    endpoint: "{{BASE_URL}}/api/cron/eve-reminders"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true

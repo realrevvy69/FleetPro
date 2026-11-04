@@ -22,18 +22,22 @@ import { SignaturePad } from "../components/SignaturePad";
 import { formatDate, formatNumber } from "../lib/format";
 import { downloadCSV, generateProtocolPDF } from "../lib/exports";
 
-export const ProtocolsTab = ({ vehicles, drivers, onChange }) => {
+export const ProtocolsTab = ({ vehicles, drivers, onChange, intent: initialIntent, onIntentDone }) => {
   const { t } = useTranslation();
   const [protocols, setProtocols] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [intent] = useState(initialIntent);
+  const [sub, setSub] = useState(intent?.type === "return" ? "history" : "handover");
 
   const load = async () => {
-    try { setProtocols((await api.get("/protocols")).data); }
+    try { setProtocols((await api.get("/protocols")).data); setLoaded(true); }
     catch { toast.error(t("common.failed")); }
   };
-  useEffect(() => { load(); }, []);
+  // eslint-disable-next-line
+  useEffect(() => { load(); if (initialIntent) onIntentDone?.(); }, []);
 
   return (
-    <Tabs defaultValue="handover" className="w-full">
+    <Tabs value={sub} onValueChange={setSub} className="w-full">
       <TabsList className="bg-[#141414] border border-white/10 p-1 h-auto">
         <TabsTrigger value="handover" data-testid="proto-tab-handover" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-zinc-400 px-4 py-1.5 rounded-sm">
           <ClipboardSignature className="w-4 h-4 mr-2" /> {t("protocols.tab_handover")}
@@ -44,10 +48,10 @@ export const ProtocolsTab = ({ vehicles, drivers, onChange }) => {
       </TabsList>
 
       <TabsContent value="handover" className="mt-6">
-        <HandoverForm vehicles={vehicles} drivers={drivers} onSubmitted={() => { load(); onChange(); }} />
+        <HandoverForm vehicles={vehicles} drivers={drivers} intent={intent?.type === "handover" ? intent : null} onSubmitted={() => { load(); onChange(); }} />
       </TabsContent>
       <TabsContent value="history" className="mt-6">
-        <HistoryList protocols={protocols} vehicles={vehicles} onChanged={() => { load(); onChange(); }} />
+        <HistoryList protocols={protocols} vehicles={vehicles} loaded={loaded} intent={intent?.type === "return" ? intent : null} onChanged={() => { load(); onChange(); }} />
       </TabsContent>
     </Tabs>
   );
@@ -64,13 +68,35 @@ const initialForm = () => ({
   signature_base64: "",
   handover_signature_base64: "",
   notes: "",
+  calendar_event_id: null,
 });
 
-const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
+const prefillForm = (intent, drivers) => {
+  const f = initialForm();
+  if (!intent) return f;
+  const name = intent.driver_name || "";
+  const d = drivers.find((x) => x.name.toLowerCase() === name.toLowerCase());
+  return {
+    ...f,
+    vehicle_id: intent.vehicle_id,
+    driver_id: d ? d.id : (name ? "__custom__" : ""),
+    driver_name: d ? d.name : name,
+    notes: intent.notes || "",
+    calendar_event_id: intent.id,
+    calendar_date: intent.date,
+  };
+};
+
+const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
   const { t } = useTranslation();
-  const [form, setForm] = useState(initialForm());
+  const [form, setForm] = useState(() => prefillForm(intent, drivers));
   const [linkedDamages, setLinkedDamages] = useState([]);
   const available = vehicles.filter((v) => v.status !== "on_road");
+
+  useEffect(() => {
+    if (intent && vehicles.find((v) => v.id === intent.vehicle_id)?.status === "on_road") toast.error(t("calendar.vehicle_on_road"));
+    // eslint-disable-next-line
+  }, []);
 
   useEffect(() => {
     if (form.vehicle_id) {
@@ -126,6 +152,7 @@ const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
         signature_base64: form.signature_base64,
         handover_signature_base64: form.handover_signature_base64 || null,
         notes: form.notes || null,
+        calendar_event_id: form.calendar_event_id || null,
       });
       toast.success(t("protocols.handover_completed"));
       setForm(initialForm());
@@ -142,6 +169,11 @@ const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
           <h2 className="font-heading text-2xl font-semibold">{t("protocols.new_handover")}</h2>
           <p className="text-sm text-zinc-500 mt-1">{t("protocols.subtitle")}</p>
         </div>
+        {form.calendar_event_id && (
+          <div data-testid="handover-from-calendar" className="rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs text-blue-400">
+            {t("calendar.from_calendar", { date: new Date(`${form.calendar_date}T00:00`).toLocaleDateString() })}
+          </div>
+        )}
 
         <Field label={t("protocols.vehicle")}>
           <Select value={form.vehicle_id} onValueChange={(v) => setForm({ ...form, vehicle_id: v, mileage: "" })}>
@@ -283,9 +315,10 @@ const HandoverForm = ({ vehicles, drivers, onSubmitted }) => {
   );
 };
 
-const HistoryList = ({ protocols, vehicles, onChanged }) => {
+const HistoryList = ({ protocols, vehicles, loaded, intent, onChanged }) => {
   const { t } = useTranslation();
   const [returning, setReturning] = useState(null);
+  const [retEventId, setRetEventId] = useState(null);
   const [retForm, setRetForm] = useState({ driver_name: "", fuel_level: 50, mileage: "", extras: [], signature_base64: "", handover_signature_base64: "", notes: "" });
   const [viewing, setViewing] = useState(null);
   const [search, setSearch] = useState("");
@@ -307,8 +340,9 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
     });
   })();
 
-  const openReturn = (p) => {
+  const openReturn = (p, eventId = null) => {
     setReturning(p);
+    setRetEventId(eventId);
     setRetForm({
       driver_name: p.driver_name,
       fuel_level: p.fuel_level,
@@ -319,6 +353,14 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
       notes: "",
     });
   };
+
+  useEffect(() => {
+    if (!intent || !loaded) return;
+    const open = protocols.find((p) => p.vehicle_id === intent.vehicle_id && !p.returned);
+    if (open) openReturn(open, intent.id);
+    else toast.error(t("calendar.no_open_handover"));
+    // eslint-disable-next-line
+  }, [loaded]);
 
   const submitReturn = async () => {
     if (!retForm.signature_base64) return toast.error(t("protocols.validation_signature"));
@@ -333,6 +375,7 @@ const HistoryList = ({ protocols, vehicles, onChanged }) => {
         signature_base64: retForm.signature_base64,
         handover_signature_base64: retForm.handover_signature_base64 || null,
         notes: retForm.notes || null,
+        calendar_event_id: retEventId,
       });
       toast.success(t("protocols.returned_status"));
       setReturning(null);

@@ -1,8 +1,10 @@
 import React from "react";
 import { eachDayOfInterval, format, isSameDay, isSameMonth, isToday } from "date-fns";
+import { AlertTriangle } from "lucide-react";
 import { TYPE_META } from "./eventTypes";
+import { EventChip } from "./EventChip";
 
-export const MonthGrid = ({ month, range, selected, onSelect, events, locale }) => {
+export const MonthGrid = ({ month, range, selected, onSelect, events, locale, conflicts }) => {
   const days = eachDayOfInterval(range);
   const byDate = events.reduce((acc, e) => ((acc[e.date] = acc[e.date] || []).push(e), acc), {});
 
@@ -20,6 +22,7 @@ export const MonthGrid = ({ month, range, selected, onSelect, events, locale }) 
           const key = format(d, "yyyy-MM-dd");
           const list = byDate[key] || [];
           const active = isSameDay(d, selected);
+          const clash = list.some((e) => conflicts.has(e.id));
           return (
             <button
               key={key}
@@ -30,15 +33,14 @@ export const MonthGrid = ({ month, range, selected, onSelect, events, locale }) 
                 active ? "bg-blue-600/15 ring-1 ring-inset ring-blue-500" : "hover:bg-white/5"
               } ${isSameMonth(d, month) ? "" : "opacity-35"}`}
             >
-              <span className={`text-xs font-mono w-6 h-6 flex items-center justify-center rounded-full ${isToday(d) ? "bg-blue-600 text-white" : "text-zinc-300"}`}>
-                {format(d, "d")}
+              <span className="flex items-center justify-between w-full">
+                <span className={`text-xs font-mono w-6 h-6 flex items-center justify-center rounded-full ${isToday(d) ? "bg-blue-600 text-white" : "text-zinc-300"}`}>
+                  {format(d, "d")}
+                </span>
+                {clash && <AlertTriangle data-testid={`cal-conflict-${key}`} className="w-3.5 h-3.5 text-amber-400" />}
               </span>
               <div className="hidden md:flex flex-col gap-0.5 w-full">
-                {list.slice(0, 2).map((e) => (
-                  <span key={e.id} className={`truncate text-[10px] px-1.5 py-0.5 rounded-sm border ${TYPE_META[e.type].chip} ${TYPE_META[e.type].text}`}>
-                    {e.time ? `${e.time} ` : ""}{e.vehicle_label}
-                  </span>
-                ))}
+                {list.slice(0, 2).map((e) => <EventChip key={e.id} e={e} />)}
                 {list.length > 2 && <span className="text-[10px] text-zinc-500">+{list.length - 2}</span>}
               </div>
               <div className="flex md:hidden gap-0.5 flex-wrap">

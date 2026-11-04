@@ -2,10 +2,10 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
 import { Button } from "../ui/button";
-import { Clock, User, Trash2, Pencil, Plus, Sparkles } from "lucide-react";
+import { Clock, User, Trash2, Pencil, Plus, Sparkles, Bell, CheckCircle2, AlertTriangle, ClipboardSignature } from "lucide-react";
 import { TYPE_META } from "./eventTypes";
 
-export const DayEvents = ({ day, events, locale, onAdd, onEdit, onDelete }) => {
+export const DayEvents = ({ day, events, locale, conflicts, onAdd, onEdit, onDelete, onStartProtocol }) => {
   const { t } = useTranslation();
   return (
     <div data-testid="calendar-day-panel" className="bg-[#141414] border border-white/10 rounded-lg p-5 space-y-4">
@@ -22,27 +22,42 @@ export const DayEvents = ({ day, events, locale, onAdd, onEdit, onDelete }) => {
         <div data-testid="calendar-day-empty" className="border border-dashed border-white/10 rounded-md p-6 text-center text-sm text-zinc-500">{t("calendar.no_events")}</div>
       ) : (
         <div className="space-y-2">
-          {events.map((e) => <EventRow key={e.id} e={e} t={t} onEdit={onEdit} onDelete={onDelete} />)}
+          {events.map((e) => (
+            <EventRow key={e.id} e={e} t={t} clash={conflicts.has(e.id)} onEdit={onEdit} onDelete={onDelete} onStartProtocol={onStartProtocol} />
+          ))}
         </div>
       )}
     </div>
   );
 };
 
-const EventRow = ({ e, t, onEdit, onDelete }) => {
+const Tag = ({ icon: Icon, className, children, testId }) => (
+  <span data-testid={testId} className={`text-[10px] flex items-center gap-1 ${className}`}><Icon className="w-3 h-3" />{children}</span>
+);
+
+const EventRow = ({ e, t, clash, onEdit, onDelete, onStartProtocol }) => {
   const meta = TYPE_META[e.type];
+  const canStart = !e.auto && !e.done && (e.type === "handover" || e.type === "return");
   return (
-    <div data-testid={`calendar-event-${e.id}`} className="flex gap-3 p-3 rounded-md bg-[#0A0A0A] border border-white/10">
+    <div data-testid={`calendar-event-${e.id}`} className={`flex gap-3 p-3 rounded-md bg-[#0A0A0A] border ${clash ? "border-amber-500/50" : "border-white/10"} ${e.done ? "opacity-60" : ""}`}>
       <span className={`w-1 rounded-full ${meta.dot}`} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs font-semibold uppercase tracking-wider ${meta.text}`}>{t(`calendar.types.${e.type}`)}</span>
-          {e.time && <span className="text-xs font-mono text-zinc-400 flex items-center gap-1"><Clock className="w-3 h-3" />{e.time}</span>}
-          {e.auto && <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Sparkles className="w-3 h-3" />{t("calendar.auto")}</span>}
+          <span className={`text-xs font-semibold uppercase tracking-wider ${meta.text} ${e.done ? "line-through" : ""}`}>{t(`calendar.types.${e.type}`)}</span>
+          {e.time && <Tag icon={Clock} className="font-mono text-zinc-400 text-xs">{e.time}</Tag>}
+          {e.auto && <Tag icon={Sparkles} className="text-zinc-500">{t("calendar.auto")}</Tag>}
+          {e.done && <Tag icon={CheckCircle2} className="text-emerald-400" testId={`calendar-event-done-${e.id}`}>{t("calendar.done")}</Tag>}
+          {!e.auto && !e.done && e.remind_day_before && <Tag icon={Bell} className="text-zinc-500" testId={`calendar-event-eve-${e.id}`}>15:00</Tag>}
+          {clash && <Tag icon={AlertTriangle} className="text-amber-400" testId={`calendar-event-conflict-${e.id}`}>{t("calendar.conflict_badge")}</Tag>}
         </div>
         <div className="text-sm mt-1 truncate">{e.vehicle_label}</div>
         {e.driver_name && <div className="text-xs text-zinc-400 mt-1 flex items-center gap-1"><User className="w-3 h-3" />{e.driver_name}</div>}
         {e.notes && <div className="text-xs text-zinc-500 mt-1 break-words">{e.notes}</div>}
+        {canStart && (
+          <Button size="sm" onClick={() => onStartProtocol(e)} data-testid={`calendar-event-start-protocol-${e.id}`} className="mt-2 h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs">
+            <ClipboardSignature className="w-3.5 h-3.5 mr-1" /> {t("calendar.start_protocol")}
+          </Button>
+        )}
       </div>
       {!e.auto && (
         <div className="flex flex-col gap-1">
