@@ -31,6 +31,12 @@ Carpool Management App "FleetPro": black UI / white text / blue accents. Dashboa
 - **PWA**: manifest, icons (192/512), service worker (cache-first shell, network-first /api GET, write-queue + replay), `apple-mobile-web-app-*` meta tags, offline read for cached resources, queued writes.
 - **Capacitor scaffold**: `capacitor.config.ts` + `ANDROID_BUILD.md` documenting `yarn build → npx cap add android → cap sync → Android Studio APK`. WebView loads the production preview URL by default; can be flipped to bundled assets by removing the `server.url`.
 
+## v1.6 – Ziehen & Kalender-Export (2026-06)
+- Drag & drop (@dnd-kit, mouse + 250ms touch long-press, pointerWithin collision): week view → day + hour (minutes kept) or "Ohne Uhrzeit"; month view → day (time kept). Auto/done items not draggable. Conflict warning toast after drop.
+- iCal export: secret subscription feed `GET /api/calendar/feed/{token}.ics` (token in `settings` collection, `GET /api/calendar/feed-token`, `POST /api/calendar/feed-token/reset`), range today-180d..+730d incl. service items; per-event download `GET /api/calendar/events/{id}/ics`. Subscribe dialog with copy / Google / Outlook web / webcal links.
+- Tested: iteration_6 (33/33 backend); fixed DragOverlay 24px offset + mobile dialog overflow, self-verified.
+- Known limit: on phones month view shows dots only → drag on mobile via week view.
+
 ## v1.5 – Kalender-Erweiterungen (2026-06)
 - "Protokoll starten" on handover/return appointments → Protocols tab prefilled (vehicle, driver, notes) / return dialog auto-opens for the open handover; saving marks the appointment done (`calendar_event_id` on protocol create; deleting the protocol resets it).
 - Week view (Mon–Sun, "Ohne Uhrzeit" row + hour slots 07–19, auto-extended) with Month/Week toggle.

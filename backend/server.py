@@ -907,7 +907,9 @@ async def _feed_token(reset: bool = False) -> str:
 
 @api_router.get("/calendar/events/{event_id}/ics")
 async def calendar_event_ics(event_id: str):
-    items = [i for i in await _calendar_items(date(2000, 1, 1), date(2100, 1, 1)) if i["id"] == event_id]
+    doc = None if event_id.startswith("service-") else await db.calendar_events.find_one({"id": event_id}, {"_id": 0})
+    start, end = (date.fromisoformat(doc["date"]),) * 2 if doc else (date(2000, 1, 1), date(2100, 1, 1))
+    items = [i for i in await _calendar_items(start, end) if i["id"] == event_id]
     if not items:
         raise HTTPException(404, "Event not found")
     return _ics_response(items, f"fleetpro-{items[0]['date']}.ics")

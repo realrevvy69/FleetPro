@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { addMonths, addWeeks, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
-import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { Button } from "../components/ui/button";
@@ -73,7 +73,7 @@ export const CalendarTab = ({ vehicles, drivers, onStartProtocol }) => {
     if (!over || !e) return;
     const { date, time } = dropTarget(e, String(over.id));
     if (date === e.date && time === (e.time || null)) return;
-    const clash = events.some((x) => !x.auto && x.id !== e.id && x.vehicle_id === e.vehicle_id && x.date === date);
+    const clash = events.some((x) => !x.auto && !x.done && x.id !== e.id && x.vehicle_id === e.vehicle_id && x.date === date);
     setEvents((evs) => evs.map((x) => (x.id === e.id ? { ...x, date, time } : x)));
     setSelected(new Date(`${date}T00:00`));
     try {
@@ -119,18 +119,20 @@ export const CalendarTab = ({ vehicles, drivers, onStartProtocol }) => {
         {Object.keys(TYPE_META).map((k) => (
           <span key={k} className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TYPE_META[k].dot}`} />{t(`calendar.types.${k}`)}</span>
         ))}
-        <span data-testid="calendar-drag-hint" className="flex items-center gap-1.5 text-zinc-500 md:ml-auto"><Move className="w-3 h-3" />{t("calendar.drag_hint")}</span>
+        <span data-testid="calendar-drag-hint" className={`items-center gap-1.5 text-zinc-500 md:ml-auto ${view === "month" ? "hidden md:flex" : "flex"}`}><Move className="w-3 h-3" />{t("calendar.drag_hint")}</span>
       </div>
 
-      <DndContext sensors={sensors} onDragStart={({ active }) => setDragging(active.data.current?.event)} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
-          {view === "week" ? <WeekGrid {...gridProps} /> : <MonthGrid month={month} {...gridProps} />}
-          <DayEvents day={selected} events={dayEvents} locale={locale} conflicts={conflicts} onAdd={() => setDialog({ date: ymd(selected) })}
-            onEdit={(e) => setDialog({ event: e })} onDelete={remove} onStartProtocol={onStartProtocol} />
+      <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={({ active }) => setDragging(active.data.current?.event)} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+        <div>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+            {view === "week" ? <WeekGrid {...gridProps} /> : <MonthGrid month={month} {...gridProps} />}
+            <DayEvents day={selected} events={dayEvents} locale={locale} conflicts={conflicts} onAdd={() => setDialog({ date: ymd(selected) })}
+              onEdit={(e) => setDialog({ event: e })} onDelete={remove} onStartProtocol={onStartProtocol} />
+          </div>
+          <DragOverlay dropAnimation={null}>
+            {dragging ? <ChipView e={dragging} className="shadow-lg shadow-blue-500/30 bg-[#141414] w-40" /> : null}
+          </DragOverlay>
         </div>
-        <DragOverlay dropAnimation={null}>
-          {dragging ? <ChipView e={dragging} className="shadow-lg shadow-blue-500/30 bg-[#141414] w-40" /> : null}
-        </DragOverlay>
       </DndContext>
 
       <EventDialog state={dialog} onClose={() => setDialog(null)} vehicles={vehicles} drivers={drivers} onSaved={() => { setDialog(null); load(); }} />

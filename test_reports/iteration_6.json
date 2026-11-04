@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 6: tested calendar drag&drop (week + month) and iCal export (subscription feed + per-event .ics). Backend: new test_calendar_ical.py (11 tests: token stable, wrong token 404, VCALENDAR/VTIMEZONE, all lines <=75 octets with CRLF, range today-180..+730 (past -200d and +800d excluded), timed TZID DTSTART/DTEND +1h incl. 23:30 -> next day 00:30, untimed VALUE=DATE + next day, SUMMARY 'Übergabe: Brand Model (PLATE)', '✓ ' prefix for done, DESCRIPTION 'Fahrer:' + escaped , ; , auto service item in feed + single ics, attachment header, unknown id 404, reset -> new token, old 404, new 200) + regression test_calendar.py/test_calendar_protocols.py -> 33/33 pass. Frontend (Playwright, DE, desktop): drag hint visible; subscribe dialog URL = BACKEND_URL/api/calendar/feed/<token>.ics, readonly, copy toast 'Link kopiert' + clipboard correct, Google/Outlook/webcal hrefs correct, reset -> confirm, URL+links change, toast 'Neuer Link erzeugt', old feed 404; ics links on manual + auto service rows, download works (fleetpro-YYYY-MM-DD.ics). Drag&drop logic correct (untimed->hour gives HH:00, 09:30->11h gives 11:30, ->none removes time, month keeps time, conflict warning toast, selected day switches, persisted via API, done & auto chips not draggable, drop outside no-op, plain click selects day). BUT a real positioning bug: drop target is computed ~24px BELOW the pointer, so in week view drops land one hour later than where the cursor is (reproduced: cursor on 11:00 row -> highlighted/saved 12:00; cursor on 14:00 -> saved 15:00), and in month view dropping in the lower part of a cell lands in the following week. Regression add/edit/delete/conflict warning/month-week toggle/start-protocol all OK.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/calendar/events/{id}/ics", "issue": "Loads all items 2000-2100 and filters in Python to find one id; fine for now but could query calendar_events by id directly (and schedule by id for service-*)"},
+      {"endpoint": "PUT /api/calendar/events/{id}", "issue": "No server-side guard against moving a done event (only UI blocks it)"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CalendarTab DragOverlay", "issue": "ROOT CAUSE: <DragOverlay> renders as a direct child of the calendar-page div which has Tailwind 'space-y-6' -> overlay wrapper (position:fixed) receives margin-top:24px. Overlay rect measured by dnd-kit is 24px below the real chip/pointer (style top 656px but rendered at 680px). Collision detection (default rectIntersection on overlay rect) therefore selects the cell below the cursor: week view lands 1 hour later whenever the cursor is in the upper ~2/3 of a 36px row; month view jumps to next week when dropping in lower part of a cell. Fix: move DragOverlay out of the space-y container (e.g. wrap DndContext children in a <div>, or render DragOverlay via createPortal(document.body)), or give it className='!mt-0'; additionally consider collisionDetection={pointerWithin} for pointer-accurate drops.", "selector": "[data-testid^=week-cell-], [data-testid^=cal-day-]", "priority": "HIGH"},
+      {"component": "SubscribeDialog mobile (390px)", "issue": "Dialog content overflows horizontally: Copy button, link buttons and reset text are clipped on the right. Input in flex row needs min-w-0 / dialog needs max-w-[calc(100vw-2rem)]", "selector": "[data-testid=calendar-subscribe-dialog]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Calendar month view mobile", "issues": ["Month cells show only dots (chips hidden below md), so drag&drop in month view is impossible on phones although the drag hint is shown; only week view supports touch drag"]},
+      {"screen": "Calendar conflict on drag", "issues": ["Done events count as conflicts: dragging to a day that only has a completed appointment of the same vehicle triggers the 'doppelt eingeplant' warning toast"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_calendar_ical.py", "/app/backend/tests/test_calendar.py", "/app/backend/tests/test_calendar_protocols.py", "/app/backend/tests/ui_seed_it6.py", "/app/test_reports/pytest/pytest_results_it6.xml"],
+  "action_items": [
+    "HIGH: Fix DragOverlay 24px offset (space-y-6 margin on DragOverlay wrapper) so drop target matches the cursor; optionally use collisionDetection={pointerWithin}",
+    "MEDIUM: Fix horizontal overflow of SubscribeDialog on mobile (min-w-0 on Input / max width on DialogContent)",
+    "Optional: exclude done events from drag conflict check; consider allowing month drag on mobile or hide hint there"
+  ],
+  "critical_code_review_comments": [
+    "CalendarTab onDragEnd does optimistic update then load(); on PUT failure the reload reverts - OK",
+    "Month cell shows max 2 chips; events hidden behind '+N' cannot be dragged in month view",
+    "TouchSensor long-press (250ms) not verifiable with Playwright here - needs manual check on a real device; week grid is inside overflow-x-auto container, check horizontal scroll vs drag on touch",
+    "server.py now ~1024 lines - split calendar/iCal into its own router module"
+  ],
+  "updated_files": ["/app/backend/tests/test_calendar_ical.py", "/app/backend/tests/ui_seed_it6.py"],
+  "success_rate": {"backend": "100% (33/33)", "frontend": "~85% - all flows functionally work, but drop position offset bug (HIGH) and mobile subscribe dialog overflow"},
+  "seed_data_creation": "TEST_Drag vehicle + 4 events + TEST_Oil mileage schedule via ui_seed_it6.py; cleaned up (vehicle delete cascades). Backend tests clean up their own TEST_Ical vehicle/schedule. Feed token was reset (by tests and UI) - current token is valid, old ones 404.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Container date 2026-11-04 (Wed, KW45). Seed: python /app/backend/tests/ui_seed_it6.py (writes /tmp/it6_seed.json), 'cleanup' arg removes. For drags use page.mouse.down -> small move (activation 6px) -> move in steps -> up. Until the overlay fix, tests had to aim 24px above the target cell center; after fix, drag to the cell center directly and verify the highlighted cell (class bg-blue-600/25) equals the cell under the cursor. Do NOT remove sonner toast DOM nodes manually (crashes React)."
+}
