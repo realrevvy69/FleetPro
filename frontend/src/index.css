@@ -60,6 +60,12 @@ html.light .text-zinc-500 { color: #71717A !important; }
 html.light .text-zinc-600 { color: #A1A1AA !important; }
 html.light .hover\:text-white:hover { color: #18181B !important; }
 
+/* Keep white text on solid blue accents (buttons, active pills, today marker) */
+html.light .bg-blue-600,
+html.light .bg-blue-600 .text-white,
+html.light .bg-blue-600.text-white,
+html.light [data-state="active"].data-\[state\=active\]\:bg-blue-600 { color: #FFFFFF !important; }
+
 /* Card with subtle border tint for light backgrounds */
 html.light .bg-\[\#141414\] {
     box-shadow: 0 1px 0 rgba(0,0,0,0.02);

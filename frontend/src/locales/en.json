@@ -223,7 +223,8 @@
     "title": "Vehicle QR Sticker",
     "description": "Scan to open the handover form pre-filled for this vehicle.",
     "print": "Print Sticker",
-    "scan_hint": "Scan to start handover · FleetPro"
+    "scan_hint": "Scan to start handover · FleetPro",
+    "popup_blocked": "Pop-up was blocked – please allow pop-ups for this site"
   },
   "push": {
     "on": "Push ON",

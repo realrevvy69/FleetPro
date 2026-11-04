@@ -6,6 +6,7 @@ import {
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Printer, QrCode } from "lucide-react";
+import { toast } from "sonner";
 
 const PRINT_CSS = `
   body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; }
@@ -18,7 +19,7 @@ const PRINT_CSS = `
 // Builds the print page with DOM APIs only (textContent), so vehicle data can never inject markup.
 const printQr = (vehicle, svg, hint) => {
   const w = window.open("", "_blank");
-  if (!w || !svg) return;
+  if (!w || !svg) return false;
   const doc = w.document;
   doc.title = `${vehicle.brand} ${vehicle.model} – ${vehicle.license_plate}`;
   const style = doc.createElement("style");
@@ -37,13 +38,16 @@ const printQr = (vehicle, svg, hint) => {
   add("div", "footer", hint);
   w.focus();
   setTimeout(() => w.print(), 100);
+  return true;
 };
 
 export const VehicleQRModal = ({ vehicle, open, onOpenChange }) => {
   const { t } = useTranslation();
   if (!vehicle) return null;
   const url = `${window.location.origin}/handover/${vehicle.id}`;
-  const print = () => printQr(vehicle, document.getElementById(`qr-svg-${vehicle.id}`), t("qr.scan_hint"));
+  const print = () => {
+    if (!printQr(vehicle, document.getElementById(`qr-svg-${vehicle.id}`), t("qr.scan_hint"))) toast.error(t("qr.popup_blocked"));
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -237,11 +237,6 @@ const DamagesSection = ({ vehicles, onChange }) => {
     onChange();
   };
 
-  const vehicleLabel = (id) => {
-    const v = vehicles.find((x) => x.id === id);
-    return v ? `${v.brand} ${v.model} · ${v.license_plate}` : t("common.unknown");
-  };
-
   return (
     <div data-testid="damages-section" className="space-y-4">
       <div className="flex items-center justify-between">

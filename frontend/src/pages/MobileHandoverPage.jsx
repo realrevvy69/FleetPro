@@ -123,7 +123,7 @@ export default function MobileHandoverPage() {
           </Field>
           <div className="space-y-2">
             <Label className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{t("protocols.extras_checklist")}</Label>
-            <div className="grid grid-cols-1 gap-2 p-3 rounded-md bg-[#0A0A0A] border border-white/10">
+            <div className="grid grid-cols-1 gap-2 p-3 rounded-md bg-[#0A0A0A] border border-white/10 empty:hidden">
               {form.extras.map((e, idx) => (
                 <div key={e.name} className="flex items-center justify-between gap-2">
                   <label className="flex items-center gap-2 cursor-pointer flex-1">
@@ -135,8 +135,8 @@ export default function MobileHandoverPage() {
               ))}
             </div>
             <div className="flex gap-2">
-              <Input value={form.newExtra} onChange={(e) => setForm({ ...form, newExtra: e.target.value })} placeholder={t("protocols.add_custom")} className="bg-[#0A0A0A] border-white/10 flex-1" />
-              <Button type="button" onClick={addExtra} variant="secondary" className="bg-[#1A1A1A] border-white/10"><Plus className="w-4 h-4" /></Button>
+              <Input data-testid="mobile-new-extra-input" value={form.newExtra} onChange={(e) => setForm({ ...form, newExtra: e.target.value })} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addExtra())} placeholder={t("protocols.add_custom")} className="bg-[#0A0A0A] border-white/10 flex-1" />
+              <Button type="button" onClick={addExtra} variant="secondary" data-testid="mobile-add-extra-btn" className="bg-[#1A1A1A] border-white/10"><Plus className="w-4 h-4" /></Button>
             </div>
           </div>
           <Field label={t("protocols.signature")}>

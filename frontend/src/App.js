@@ -3,6 +3,7 @@ import "@/App.css";
 import { useTranslation } from "react-i18next";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { api } from "./lib/api";
+import { useLatest } from "./lib/hooks";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
@@ -24,6 +25,7 @@ const useFleetData = (t) => {
   const [drivers, setDrivers] = useState([]);
   const [stats, setStats] = useState({ total: 0, on_road: 0, damaged: 0, maintenance: 0, parked: 0 });
   const [alerts, setAlerts] = useState([]);
+  const tRef = useLatest(t);
 
   const refresh = useCallback(async () => {
     try {
@@ -36,16 +38,16 @@ const useFleetData = (t) => {
       setDrivers(d.data);
     } catch (e) {
       console.error(e);
-      toast.error(t("common.failed"));
+      toast.error(tRef.current("common.failed"));
     }
-  }, [t]);
+  }, [tRef]);
 
+  useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => {
-    refresh();
     unregisterStaleServiceWorker().catch(() => {});
     registerServiceWorker().catch(() => {});
     ensureServiceWorker().catch(() => {});
-  }, [refresh]);
+  }, []);
 
   return { vehicles, drivers, stats, alerts, refresh };
 };

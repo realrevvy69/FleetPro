@@ -223,7 +223,8 @@
     "title": "Fahrzeug-QR-Aufkleber",
     "description": "Scannen, um das vorausgefüllte Übergabeformular für dieses Fahrzeug zu öffnen.",
     "print": "Aufkleber drucken",
-    "scan_hint": "Scannen für Übergabe · FleetPro"
+    "scan_hint": "Scannen für Übergabe · FleetPro",
+    "popup_blocked": "Pop-up wurde blockiert – bitte Pop-ups für diese Seite erlauben"
   },
   "push": {
     "on": "Push EIN",
