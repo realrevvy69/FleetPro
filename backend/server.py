@@ -21,6 +21,15 @@ import uuid
 from datetime import datetime, timezone, date, timedelta
 from pywebpush import webpush, WebPushException
 
+if __package__:
+    from .auth.config import AuthSettings
+    from .auth.router import build_auth_router
+    from .auth.service import AuthService
+else:
+    from auth.config import AuthSettings
+    from auth.router import build_auth_router
+    from auth.service import AuthService
+
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -31,6 +40,8 @@ db = client[os.environ['DB_NAME']]
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+auth_service = AuthService(db, AuthSettings.from_env())
+api_router.include_router(build_auth_router(auth_service))
 
 
 def now_iso():
@@ -1108,6 +1119,7 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def _startup():
+    await auth_service.ensure_indexes()
     await db.cron_runs.create_index("run_id", unique=True)
     asyncio.create_task(_check_maintenance_alerts_loop())
 
