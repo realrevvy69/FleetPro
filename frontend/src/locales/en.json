@@ -33,7 +33,8 @@
     "vehicles": "Vehicles",
     "maintenance": "Service",
     "protocols": "Protocols",
-    "drivers": "Drivers"
+    "drivers": "Drivers",
+    "calendar": "Calendar"
   },
   "dashboard": {
     "section": "Fleet Overview",
@@ -241,5 +242,34 @@
   },
   "footer": {
     "tracked": "{{count}} vehicles tracked"
+  },
+  "calendar": {
+    "title": "Calendar",
+    "subtitle": "A push reminder arrives at 8:00 AM on the day of each appointment",
+    "add_event": "Add appointment",
+    "edit_event": "Edit appointment",
+    "dialog_description": "Plan a handover, return or a vehicle leaving the pool.",
+    "type": "Type",
+    "vehicle": "Vehicle",
+    "select_vehicle": "Select vehicle",
+    "date": "Date",
+    "time": "Time (optional)",
+    "driver": "Driver (optional)",
+    "driver_placeholder": "Driver name",
+    "notes": "Notes (optional)",
+    "today": "Today",
+    "no_events": "No appointments on this day",
+    "auto": "Automatic",
+    "added": "Appointment added",
+    "updated": "Appointment updated",
+    "delete_confirm": "Delete this appointment?",
+    "validation_vehicle": "Please select a vehicle",
+    "validation_date": "Please select a date",
+    "types": {
+      "handover": "Handover",
+      "return": "Return",
+      "pool_exit": "Leaves the pool",
+      "service": "Service due"
+    }
   }
 }

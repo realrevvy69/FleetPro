@@ -1,5 +1,9 @@
-from fastapi import FastAPI, APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Request, BackgroundTasks
+from fastapi.responses import StreamingResponse, JSONResponse
+from pymongo.errors import DuplicateKeyError
+from zoneinfo import ZoneInfo
+import hmac
+import calendar as pycal
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -13,7 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Any, Dict
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from pywebpush import webpush, WebPushException
 
 
@@ -222,6 +226,7 @@ async def delete_vehicle(vehicle_id: str):
     await db.damages.delete_many({"vehicle_id": vehicle_id})
     await db.maintenance_schedules.delete_many({"vehicle_id": vehicle_id})
     await db.protocols.delete_many({"vehicle_id": vehicle_id})
+    await db.calendar_events.delete_many({"vehicle_id": vehicle_id})
     return {"ok": True}
 
 
@@ -695,6 +700,147 @@ async def _check_maintenance_alerts_loop():
         await asyncio.sleep(1800)
 
 
+# ============ CALENDAR ============
+
+EventType = Literal["handover", "return", "pool_exit"]
+DATE_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
+TIME_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d$"
+BERLIN = ZoneInfo("Europe/Berlin")
+CRON_SECRET = os.environ["WEBHOOK_CRON_SECRET"]
+EVENT_LABELS_DE = {"handover": "Übergabe", "return": "Rückgabe", "pool_exit": "Verlässt den Pool", "service": "Service"}
+
+
+class CalendarEventCreate(BaseModel):
+    vehicle_id: str
+    type: EventType
+    date: str = Field(pattern=DATE_PATTERN)
+    time: Optional[str] = Field(default=None, pattern=TIME_PATTERN)
+    driver_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CalendarEvent(CalendarEventCreate):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=now_iso)
+
+
+def _add_months(d: date, months: int) -> date:
+    m = d.month - 1 + months
+    y = d.year + m // 12
+    m = m % 12 + 1
+    return date(y, m, min(d.day, pycal.monthrange(y, m)[1]))
+
+
+def _vehicle_label(v: Optional[Dict[str, Any]]) -> str:
+    return f"{v['brand']} {v['model']} ({v['license_plate']})" if v else "?"
+
+
+async def _calendar_items(start: date, end: date) -> List[Dict[str, Any]]:
+    vehicles = {v["id"]: v for v in await db.vehicles.find({}, {"_id": 0}).to_list(10000)}
+    items = []
+    events = await db.calendar_events.find(
+        {"date": {"$gte": start.isoformat(), "$lte": end.isoformat()}}, {"_id": 0}
+    ).to_list(10000)
+    for e in events:
+        items.append({**e, "vehicle_label": _vehicle_label(vehicles.get(e["vehicle_id"])), "auto": False})
+    today = datetime.now(BERLIN).date()
+    for s in await db.maintenance_schedules.find({}, {"_id": 0}).to_list(10000):
+        v = vehicles.get(s["vehicle_id"])
+        if not v:
+            continue
+        due_day = None
+        if s["type"] == "monthly" and s.get("last_done_date"):
+            due_day = _add_months(date.fromisoformat(s["last_done_date"][:10]), s["interval_value"])
+        elif s["type"] == "mileage":
+            if v.get("mileage", 0) >= (s.get("last_done_mileage") or 0) + s["interval_value"]:
+                due_day = today
+        if due_day and start <= due_day <= end:
+            items.append({
+                "id": f"service-{s['id']}", "vehicle_id": s["vehicle_id"], "type": "service",
+                "date": due_day.isoformat(), "time": None, "driver_name": None, "notes": s["name"],
+                "vehicle_label": _vehicle_label(v), "auto": True,
+            })
+    items.sort(key=lambda i: (i["date"], i.get("time") or ""))
+    return items
+
+
+@api_router.get("/calendar/events")
+async def list_calendar_events(start: str, end: str):
+    try:
+        s, e = date.fromisoformat(start), date.fromisoformat(end)
+    except ValueError:
+        raise HTTPException(400, "Invalid date range")
+    return await _calendar_items(s, e)
+
+
+@api_router.post("/calendar/events", response_model=CalendarEvent)
+async def create_calendar_event(payload: CalendarEventCreate):
+    if not await db.vehicles.find_one({"id": payload.vehicle_id}):
+        raise HTTPException(404, "Vehicle not found")
+    ev = CalendarEvent(**payload.model_dump())
+    await db.calendar_events.insert_one(ev.model_dump())
+    return ev
+
+
+@api_router.put("/calendar/events/{event_id}", response_model=CalendarEvent)
+async def update_calendar_event(event_id: str, payload: CalendarEventCreate):
+    if not await db.vehicles.find_one({"id": payload.vehicle_id}):
+        raise HTTPException(404, "Vehicle not found")
+    res = await db.calendar_events.update_one({"id": event_id}, {"$set": payload.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Event not found")
+    return await db.calendar_events.find_one({"id": event_id}, {"_id": 0})
+
+
+@api_router.delete("/calendar/events/{event_id}")
+async def delete_calendar_event(event_id: str):
+    res = await db.calendar_events.delete_one({"id": event_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Event not found")
+    return {"ok": True}
+
+
+async def _send_daily_reminders(run_id: str):
+    today = datetime.now(BERLIN).date()
+    items = await _calendar_items(today, today)
+    for i in items:
+        when = f" um {i['time']} Uhr" if i.get("time") else ""
+        extra = f" – {i['driver_name']}" if i.get("driver_name") else (f" – {i['notes']}" if i["auto"] and i.get("notes") else "")
+        await _broadcast_push(
+            f"Heute: {EVENT_LABELS_DE[i['type']]}",
+            f"{i['vehicle_label']}{when}{extra}",
+            "/",
+        )
+    await db.cron_runs.update_one(
+        {"run_id": run_id},
+        {"$set": {"date": today.isoformat(), "sent": len(items), "finished_at": now_iso()}},
+    )
+
+
+@api_router.post("/cron/daily-reminders", status_code=202)
+async def cron_daily_reminders(request: Request, background_tasks: BackgroundTasks):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    auth = request.headers.get("authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    if not token or not hmac.compare_digest(token.encode(), CRON_SECRET.encode()):
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"detail": "Invalid body"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"detail": "Invalid body"}, status_code=400)
+    run_id = request.headers.get("x-webhook-id") or body.get("run_id")
+    if not run_id:
+        return JSONResponse({"detail": "Missing run_id"}, status_code=400)
+    try:
+        await db.cron_runs.insert_one({"run_id": run_id, "received_at": now_iso()})
+    except DuplicateKeyError:
+        return {"accepted": True, "duplicate": True}
+    background_tasks.add_task(_send_daily_reminders, run_id)
+    return {"accepted": True}
+
+
 # ============ MOBILE HANDOVER (PUBLIC LITE INFO) ============
 
 @api_router.get("/public/vehicles/{vehicle_id}")
@@ -724,6 +870,7 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def _startup():
+    await db.cron_runs.create_index("run_id", unique=True)
     asyncio.create_task(_check_maintenance_alerts_loop())
 
 

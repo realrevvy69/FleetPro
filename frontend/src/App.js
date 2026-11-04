@@ -11,12 +11,13 @@ import { VehiclesTab } from "./pages/VehiclesTab";
 import { MaintenanceTab } from "./pages/MaintenanceTab";
 import { ProtocolsTab } from "./pages/ProtocolsTab";
 import { DriversTab } from "./pages/DriversTab";
+import { CalendarTab } from "./pages/CalendarTab";
 import MobileHandoverPage from "./pages/MobileHandoverPage";
 import { PushButton } from "./components/PushButton";
 import { SettingsMenu } from "./components/SettingsMenu";
 import { ensureServiceWorker } from "./lib/push";
 import { registerServiceWorker, unregisterStaleServiceWorker } from "./lib/sw";
-import { Car, Wrench, ClipboardSignature, Activity, Users } from "lucide-react";
+import { Car, Wrench, ClipboardSignature, Activity, Users, CalendarDays } from "lucide-react";
 
 const Shell = () => {
   const { t } = useTranslation();
@@ -98,6 +99,7 @@ const Shell = () => {
         <Tabs value={tab} onValueChange={setTab} className="w-full">
           <TabsList data-testid="main-tabs" className="bg-transparent border-b border-white/10 rounded-none p-0 h-auto w-full justify-start gap-1 mb-8 overflow-x-auto">
             <TabTrigger value="protocols" icon={ClipboardSignature} label={t("tabs.protocols")} />
+            <TabTrigger value="calendar" icon={CalendarDays} label={t("tabs.calendar")} />
             <TabTrigger value="vehicles" icon={Car} label={t("tabs.vehicles")} />
             <TabTrigger value="maintenance" icon={Wrench} label={t("tabs.maintenance")} />
             <TabTrigger value="drivers" icon={Users} label={t("tabs.drivers")} />
@@ -115,6 +117,9 @@ const Shell = () => {
           <TabsContent value="protocols" className="mt-0">
             <ProtocolsTab vehicles={vehicles} drivers={drivers} onChange={refresh} />
           </TabsContent>
+          <TabsContent value="calendar" className="mt-0">
+            <CalendarTab vehicles={vehicles} drivers={drivers} />
+          </TabsContent>
           <TabsContent value="drivers" className="mt-0">
             <DriversTab onChange={refresh} />
           </TabsContent>
@@ -123,7 +128,7 @@ const Shell = () => {
 
       <footer className="border-t border-white/10 mt-16 py-6">
         <div className="max-w-[1400px] mx-auto px-6 md:px-8 text-xs text-zinc-600 font-mono uppercase tracking-[0.2em] flex justify-between">
-          <span>FleetPro v1.3</span>
+          <span>FleetPro v1.4</span>
           <span>{t("footer.tracked", { count: stats.total })}</span>
         </div>
       </footer>

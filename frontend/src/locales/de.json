@@ -33,7 +33,8 @@
     "vehicles": "Fahrzeuge",
     "maintenance": "Service",
     "protocols": "Protokolle",
-    "drivers": "Fahrer"
+    "drivers": "Fahrer",
+    "calendar": "Kalender"
   },
   "dashboard": {
     "section": "Flottenübersicht",
@@ -241,5 +242,34 @@
   },
   "footer": {
     "tracked": "{{count}} Fahrzeuge erfasst"
+  },
+  "calendar": {
+    "title": "Kalender",
+    "subtitle": "Am Termin-Tag kommt um 8:00 Uhr eine Push-Erinnerung",
+    "add_event": "Termin hinzufügen",
+    "edit_event": "Termin bearbeiten",
+    "dialog_description": "Plane eine Übergabe, Rückgabe oder einen Pool-Abgang.",
+    "type": "Art",
+    "vehicle": "Fahrzeug",
+    "select_vehicle": "Fahrzeug wählen",
+    "date": "Datum",
+    "time": "Uhrzeit (optional)",
+    "driver": "Fahrer (optional)",
+    "driver_placeholder": "Name des Fahrers",
+    "notes": "Notizen (optional)",
+    "today": "Heute",
+    "no_events": "Keine Termine an diesem Tag",
+    "auto": "Automatisch",
+    "added": "Termin hinzugefügt",
+    "updated": "Termin aktualisiert",
+    "delete_confirm": "Diesen Termin löschen?",
+    "validation_vehicle": "Bitte ein Fahrzeug wählen",
+    "validation_date": "Bitte ein Datum wählen",
+    "types": {
+      "handover": "Übergabe",
+      "return": "Rückgabe",
+      "pool_exit": "Verlässt den Pool",
+      "service": "Service fällig"
+    }
   }
 }
