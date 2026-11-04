@@ -1,9 +1,22 @@
 """HTTP endpoints for the staged authentication foundation."""
 
-from fastapi import APIRouter, Header, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+)
 from fastapi.responses import JSONResponse
 
-from .schemas import BootstrapCredentials, LoginCredentials, public_user
+from .csrf import build_csrf_dependency, verify_origin
+from .schemas import (
+    BootstrapCredentials,
+    LoginCredentials,
+    PasswordChange,
+    public_user,
+)
 from .service import AuthError, AuthService
 
 
@@ -13,24 +26,6 @@ def _http_error(status_code: int, detail: str) -> HTTPException:
         detail=detail,
         headers={"Cache-Control": "no-store"},
     )
-
-
-def _check_origin(request: Request, service: AuthService) -> None:
-    origin = request.headers.get("origin")
-    if not origin:
-        return
-    if origin == "null":
-        raise _http_error(403, "Origin is not allowed")
-    request_origin = f"{request.url.scheme}://{request.url.netloc}".lower()
-    allowed = {
-        configured_origin.lower()
-        for configured_origin in service.settings.allowed_origins
-    }
-    if (
-        origin.rstrip("/").lower() not in allowed
-        and origin.rstrip("/").lower() != request_origin
-    ):
-        raise _http_error(403, "Origin is not allowed")
 
 
 def _set_session_cookie(
@@ -61,6 +56,7 @@ def _clear_session_cookie(response: Response, service: AuthService) -> None:
 
 def build_auth_router(service: AuthService) -> APIRouter:
     router = APIRouter(prefix="/auth", tags=["authentication"])
+    csrf_dependency = build_csrf_dependency(service)
 
     @router.post("/bootstrap", status_code=201)
     async def bootstrap_admin(
@@ -71,7 +67,7 @@ def build_auth_router(service: AuthService) -> APIRouter:
             default=None, alias="X-Admin-Bootstrap-Key"
         ),
     ):
-        _check_origin(request, service)
+        verify_origin(request, service)
         try:
             user = await service.bootstrap_admin(
                 credentials.username, credentials.password, bootstrap_key
@@ -83,7 +79,7 @@ def build_auth_router(service: AuthService) -> APIRouter:
 
     @router.post("/login")
     async def login(credentials: LoginCredentials, request: Request):
-        _check_origin(request, service)
+        verify_origin(request, service)
         try:
             session_id, csrf_token, user = await service.login(
                 credentials.username,
@@ -101,7 +97,7 @@ def build_auth_router(service: AuthService) -> APIRouter:
 
     @router.get("/me")
     async def current_user(request: Request):
-        _check_origin(request, service)
+        verify_origin(request, service)
         result = await service.current_user(
             request.cookies.get(service.settings.cookie_name)
         )
@@ -118,12 +114,52 @@ def build_auth_router(service: AuthService) -> APIRouter:
         return response
 
     @router.post("/logout", status_code=204)
-    async def logout(request: Request):
-        _check_origin(request, service)
+    async def logout(
+        request: Request,
+        _auth_context: tuple[dict, dict] = Depends(csrf_dependency),
+    ):
         try:
             await service.logout(
                 request.cookies.get(service.settings.cookie_name),
                 request.headers.get("x-csrf-token"),
+            )
+        except AuthError as exc:
+            raise _http_error(exc.status_code, exc.detail) from exc
+        response = Response(status_code=204)
+        _clear_session_cookie(response, service)
+        return response
+
+    @router.post("/rotate")
+    async def rotate_session(
+        request: Request,
+        _auth_context: tuple[dict, dict] = Depends(csrf_dependency),
+    ):
+        try:
+            session_id, csrf_token, user = await service.rotate_session(
+                request.cookies.get(service.settings.cookie_name),
+                request.headers.get("x-csrf-token"),
+            )
+        except AuthError as exc:
+            raise _http_error(exc.status_code, exc.detail) from exc
+        response = JSONResponse(
+            {"user": public_user(user), "csrf_token": csrf_token},
+            headers={"Cache-Control": "no-store"},
+        )
+        _set_session_cookie(response, session_id, service)
+        return response
+
+    @router.post("/password", status_code=204)
+    async def change_password(
+        password_change: PasswordChange,
+        request: Request,
+        auth_context: tuple[dict, dict] = Depends(csrf_dependency),
+    ):
+        user, _session = auth_context
+        try:
+            await service.change_password(
+                user["id"],
+                password_change.current_password,
+                password_change.new_password,
             )
         except AuthError as exc:
             raise _http_error(exc.status_code, exc.detail) from exc

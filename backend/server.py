@@ -40,7 +40,8 @@ db = client[os.environ['DB_NAME']]
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
-auth_service = AuthService(db, AuthSettings.from_env())
+auth_settings = AuthSettings.from_env()
+auth_service = AuthService(db, auth_settings)
 api_router.include_router(build_auth_router(auth_service))
 
 
@@ -1104,8 +1105,8 @@ app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials=auth_settings.cors_allow_credentials,
+    allow_origins=list(auth_settings.cors_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -9,6 +9,7 @@ import uuid
 from fastapi import FastAPI
 import httpx
 from mongomock_motor import AsyncMongoMockClient
+import pytest
 
 from auth.config import AuthSettings
 from auth.router import build_auth_router
@@ -32,6 +33,7 @@ def _context(username_attempt_limit: int = 5):
         session_ttl_seconds=8 * 60 * 60,
         cookie_secure=True,
         cookie_samesite="lax",
+        allowed_origins=("http://testserver",),
         username_attempt_limit=username_attempt_limit,
         ip_attempt_limit=30,
     )
@@ -88,9 +90,27 @@ def test_argon2id_hashing_verifies_without_reusing_salt():
 def test_production_cookie_is_secure_even_if_override_disables_it(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+    monkeypatch.setenv("CORS_ORIGINS", "https://fleet.example")
     monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("AUTH_ALLOWED_ORIGINS", raising=False)
 
-    assert AuthSettings.from_env().cookie_secure is True
+    settings = AuthSettings.from_env()
+    assert settings.cookie_secure is True
+    assert settings.cors_allow_credentials is True
+    assert settings.allowed_origins == ("https://fleet.example",)
+
+
+def test_cors_wildcard_never_uses_credential_cookies(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("CORS_ORIGINS", "*")
+    monkeypatch.delenv("AUTH_ALLOWED_ORIGINS", raising=False)
+    settings = AuthSettings.from_env()
+    assert settings.cors_origins == ("*",)
+    assert settings.cors_allow_credentials is False
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    with pytest.raises(ValueError, match="CORS_ORIGINS"):
+        AuthSettings.from_env()
 
 
 def test_admin_bootstrap_is_secured_and_one_time():
@@ -123,6 +143,56 @@ def test_admin_bootstrap_is_secured_and_one_time():
         assert (
             _run(_request(app, "POST", "/api/auth/register")).status_code
             == 404
+        )
+    finally:
+        mongo.close()
+
+
+def test_ten_parallel_bootstrap_requests_create_exactly_one_admin(monkeypatch):
+    mongo, database, service, app = _context()
+    original_insert = service.users.insert_one
+
+    async def make_insertions_race():
+        arrived = 0
+        lock = asyncio.Lock()
+        all_requests_ready = asyncio.Event()
+
+        async def wait_until_all_checks_passed(document):
+            nonlocal arrived
+            async with lock:
+                arrived += 1
+                if arrived == 10:
+                    all_requests_ready.set()
+            await all_requests_ready.wait()
+            return await original_insert(document)
+
+        monkeypatch.setattr(
+            service.users, "insert_one", wait_until_all_checks_passed
+        )
+        return await asyncio.gather(
+            *[
+                _request(
+                    app,
+                    "POST",
+                    "/api/auth/bootstrap",
+                    headers={"X-Admin-Bootstrap-Key": BOOTSTRAP_SECRET},
+                    json={
+                        "username": "fleetadmin",
+                        "password": ADMIN_PASSWORD,
+                    },
+                )
+                for _ in range(10)
+            ]
+        )
+
+    try:
+        responses = _run(make_insertions_race())
+        statuses = [response.status_code for response in responses]
+        assert statuses.count(201) == 1
+        assert statuses.count(409) == 9
+        assert (
+            _run(database.users.count_documents({"role": "administrator"}))
+            == 1
         )
     finally:
         mongo.close()
@@ -180,13 +250,56 @@ def test_login_cookie_current_user_and_logout_revoke_session(caplog):
         )
         assert rejected_logout.status_code == 403
 
+        rejected_wrong_csrf = _run(
+            _request(
+                app,
+                "POST",
+                "/api/auth/logout",
+                cookies={"fleetpro_session": cookie},
+                headers={"X-CSRF-Token": secrets.token_urlsafe(24)},
+            )
+        )
+        assert rejected_wrong_csrf.status_code == 403
+
+        rejected_origin = _run(
+            _request(
+                app,
+                "POST",
+                "/api/auth/logout",
+                cookies={"fleetpro_session": cookie},
+                headers={
+                    "X-CSRF-Token": csrf,
+                    "Origin": "https://untrusted.example",
+                },
+            )
+        )
+        assert rejected_origin.status_code == 403
+
+        spoofed_host_origin = _run(
+            _request(
+                app,
+                "POST",
+                "/api/auth/logout",
+                cookies={"fleetpro_session": cookie},
+                headers={
+                    "X-CSRF-Token": csrf,
+                    "Origin": "https://attacker.example",
+                    "Host": "attacker.example",
+                },
+            )
+        )
+        assert spoofed_host_origin.status_code == 403
+
         logged_out = _run(
             _request(
                 app,
                 "POST",
                 "/api/auth/logout",
                 cookies={"fleetpro_session": cookie},
-                headers={"X-CSRF-Token": csrf},
+                headers={
+                    "X-CSRF-Token": csrf,
+                    "Origin": "http://testserver",
+                },
             )
         )
         assert logged_out.status_code == 204
@@ -244,6 +357,162 @@ def test_expired_session_is_rejected_even_before_ttl_cleanup():
             )
         )
         assert response.status_code == 401
+    finally:
+        mongo.close()
+
+
+def test_session_rotation_revokes_old_id_and_rotates_csrf():
+    mongo, database, _, app = _context()
+    try:
+        assert _bootstrap(app).status_code == 201
+        logged_in = _login(app)
+        old_session_id = logged_in.cookies.get("fleetpro_session")
+        old_csrf = logged_in.json()["csrf_token"]
+
+        rotated = _run(
+            _request(
+                app,
+                "POST",
+                "/api/auth/rotate",
+                cookies={"fleetpro_session": old_session_id},
+                headers={"X-CSRF-Token": old_csrf},
+            )
+        )
+        assert rotated.status_code == 200
+        new_session_id = rotated.cookies.get("fleetpro_session")
+        new_csrf = rotated.json()["csrf_token"]
+        assert new_session_id and new_session_id != old_session_id
+        assert new_csrf != old_csrf
+
+        assert (
+            _run(
+                _request(
+                    app,
+                    "GET",
+                    "/api/auth/me",
+                    cookies={"fleetpro_session": old_session_id},
+                )
+            ).status_code
+            == 401
+        )
+        current = _run(
+            _request(
+                app,
+                "GET",
+                "/api/auth/me",
+                cookies={"fleetpro_session": new_session_id},
+            )
+        )
+        assert current.status_code == 200
+        assert current.json()["csrf_token"] == new_csrf
+        assert (
+            _run(
+                database.sessions.find_one(
+                    {"_id": hash_session_id(old_session_id)}
+                )
+            )
+            is None
+        )
+    finally:
+        mongo.close()
+
+
+def test_password_change_revokes_every_existing_session():
+    mongo, database, _, app = _context()
+    new_password = secrets.token_urlsafe(24)
+    try:
+        assert _bootstrap(app).status_code == 201
+        first_login = _login(app)
+        second_login = _login(app)
+        first_session = first_login.cookies.get("fleetpro_session")
+        second_session = second_login.cookies.get("fleetpro_session")
+
+        changed = _run(
+            _request(
+                app,
+                "POST",
+                "/api/auth/password",
+                cookies={"fleetpro_session": first_session},
+                headers={"X-CSRF-Token": first_login.json()["csrf_token"]},
+                json={
+                    "current_password": ADMIN_PASSWORD,
+                    "new_password": new_password,
+                },
+            )
+        )
+        assert changed.status_code == 204
+        assert (
+            _run(
+                database.sessions.count_documents(
+                    {"user_id": {"$exists": True}}
+                )
+            )
+            == 0
+        )
+        for session_id in (first_session, second_session):
+            assert (
+                _run(
+                    _request(
+                        app,
+                        "GET",
+                        "/api/auth/me",
+                        cookies={"fleetpro_session": session_id},
+                    )
+                ).status_code
+                == 401
+            )
+        assert _login(app, password=ADMIN_PASSWORD).status_code == 401
+        assert _login(app, password=new_password).status_code == 200
+    finally:
+        mongo.close()
+
+
+def test_role_change_and_disabling_invalidate_sessions_immediately():
+    mongo, database, service, app = _context()
+    try:
+        assert _bootstrap(app).status_code == 201
+        first_login = _login(app)
+        session_id = first_login.cookies.get("fleetpro_session")
+        user = _run(database.users.find_one({"username": "fleetadmin"}))
+
+        _run(service.change_user_role(user["id"], "employee"))
+        assert (
+            _run(database.sessions.count_documents({"user_id": user["id"]}))
+            == 0
+        )
+        assert (
+            _run(
+                _request(
+                    app,
+                    "GET",
+                    "/api/auth/me",
+                    cookies={"fleetpro_session": session_id},
+                )
+            ).status_code
+            == 401
+        )
+
+        employee_login = _login(app)
+        assert employee_login.status_code == 200
+        assert employee_login.json()["user"]["role"] == "employee"
+        employee_session = employee_login.cookies.get("fleetpro_session")
+        _run(service.set_user_disabled(user["id"], True))
+        assert (
+            _run(database.sessions.count_documents({"user_id": user["id"]}))
+            == 0
+        )
+        assert (
+            _run(
+                _request(
+                    app,
+                    "GET",
+                    "/api/auth/me",
+                    cookies={"fleetpro_session": employee_session},
+                )
+            ).status_code
+            == 401
+        )
+        assert _login(app).status_code == 401
     finally:
         mongo.close()
 

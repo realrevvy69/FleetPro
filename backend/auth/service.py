@@ -48,6 +48,9 @@ class AuthService:
         await self.sessions.create_index(
             "expires_at", expireAfterSeconds=0, name="ttl_auth_sessions"
         )
+        await self.sessions.create_index(
+            "user_id", name="auth_sessions_by_user"
+        )
         await self.login_limits.create_index(
             "expires_at", expireAfterSeconds=0, name="ttl_auth_login_limits"
         )
@@ -82,6 +85,7 @@ class AuthService:
             "password_hash": hash_password(password),
             "role": UserRole.ADMINISTRATOR.value,
             "disabled": False,
+            "auth_version": 0,
             "created_at": self._now(),
         }
         try:
@@ -172,12 +176,20 @@ class AuthService:
             {"_id": f"username:{window}:{account_digest}"}
         )
 
+        session_id, csrf_token = await self._insert_session(user, now)
+        return session_id, csrf_token, user
+
+    async def _insert_session(
+        self, user: dict, now: datetime | None = None
+    ) -> tuple[str, str]:
+        now = now or self._now()
         session_id = secrets.token_urlsafe(32)
         csrf_token = secrets.token_urlsafe(32)
         await self.sessions.insert_one(
             {
                 "_id": hash_session_id(session_id),
                 "user_id": user["id"],
+                "auth_version": user.get("auth_version", 0),
                 # Synchronizer tokens protect cookie-authenticated writes; they
                 # do not grant a session on their own.
                 "csrf_token": csrf_token,
@@ -186,7 +198,7 @@ class AuthService:
                 + timedelta(seconds=self.settings.session_ttl_seconds),
             }
         )
-        return session_id, csrf_token, user
+        return session_id, csrf_token
 
     async def current_user(
         self, session_id: str | None
@@ -203,10 +215,109 @@ class AuthService:
         if not session:
             return None
         user = await self.users.find_one({"id": session["user_id"]})
-        if not user or user.get("disabled"):
+        if (
+            not user
+            or user.get("disabled")
+            or session.get("auth_version", 0) != user.get("auth_version", 0)
+        ):
             await self.sessions.delete_one({"_id": session["_id"]})
             return None
         return user, session
+
+    async def rotate_session(
+        self, session_id: str | None, csrf_token: str | None
+    ) -> tuple[str, str, dict]:
+        current = await self.current_user(session_id)
+        if not current:
+            raise AuthError(401, "Authentication required")
+        user, session = current
+        if not csrf_token or not hmac.compare_digest(
+            session["csrf_token"].encode("utf-8"), csrf_token.encode("utf-8")
+        ):
+            raise AuthError(403, "CSRF validation failed")
+
+        old_session_hash = hash_session_id(session_id)
+        deleted = await self.sessions.delete_one(
+            {
+                "_id": old_session_hash,
+                "user_id": user["id"],
+                "auth_version": user.get("auth_version", 0),
+            }
+        )
+        if deleted.deleted_count != 1:
+            raise AuthError(401, "Authentication required")
+
+        # Delete first so old and new IDs are never simultaneously valid. If
+        # creating the replacement fails, the client must log in again.
+        latest_user = await self.users.find_one({"id": user["id"]})
+        if (
+            not latest_user
+            or latest_user.get("disabled")
+            or latest_user.get("auth_version", 0)
+            != user.get("auth_version", 0)
+        ):
+            raise AuthError(401, "Authentication required")
+        new_session_id, new_csrf_token = await self._insert_session(
+            latest_user
+        )
+        return new_session_id, new_csrf_token, latest_user
+
+    async def _revoke_user_sessions(self, user_id: str) -> None:
+        await self.sessions.delete_many({"user_id": user_id})
+
+    async def change_password(
+        self, user_id: str, current_password: str, new_password: str
+    ) -> None:
+        user = await self.users.find_one({"id": user_id})
+        if (
+            not user
+            or user.get("disabled")
+            or not verify_password(current_password, user["password_hash"])
+        ):
+            raise AuthError(401, "Current credentials are invalid")
+
+        new_hash = hash_password(new_password)
+        result = await self.users.update_one(
+            {
+                "id": user_id,
+                "password_hash": user["password_hash"],
+                "auth_version": user.get("auth_version", 0),
+                "disabled": False,
+            },
+            {
+                "$set": {"password_hash": new_hash},
+                "$inc": {"auth_version": 1},
+            },
+        )
+        if result.matched_count != 1:
+            raise AuthError(
+                409, "Account changed; retry with current credentials"
+            )
+        await self._revoke_user_sessions(user_id)
+
+    async def change_user_role(
+        self, user_id: str, role: UserRole | str
+    ) -> None:
+        try:
+            new_role = UserRole(role).value
+        except ValueError as exc:
+            raise AuthError(400, "Unsupported role") from exc
+        result = await self.users.update_one(
+            {"id": user_id},
+            {"$set": {"role": new_role}, "$inc": {"auth_version": 1}},
+        )
+        if result.matched_count != 1:
+            raise AuthError(404, "User not found")
+        await self._revoke_user_sessions(user_id)
+
+    async def set_user_disabled(self, user_id: str, disabled: bool) -> None:
+        result = await self.users.update_one(
+            {"id": user_id},
+            {"$set": {"disabled": disabled}, "$inc": {"auth_version": 1}},
+        )
+        if result.matched_count != 1:
+            raise AuthError(404, "User not found")
+        await self._revoke_user_sessions(user_id)
 
     async def logout(
         self, session_id: str | None, csrf_token: str | None

@@ -15,6 +15,8 @@ class AuthSettings:
     username_attempt_limit: int = 5
     ip_attempt_limit: int = 30
     allowed_origins: tuple[str, ...] = ()
+    cors_origins: tuple[str, ...] = ("*",)
+    cors_allow_credentials: bool = False
 
     @classmethod
     def from_env(cls) -> "AuthSettings":
@@ -50,9 +52,22 @@ class AuthSettings:
                 "SESSION_COOKIE_SAMESITE must be 'lax' or 'strict'"
             )
 
-        raw_origins = os.getenv(
-            "AUTH_ALLOWED_ORIGINS", os.getenv("CORS_ORIGINS", "")
-        )
+        raw_cors_origins = os.getenv("CORS_ORIGINS", "*")
+        cors_origins = tuple(
+            origin.strip().rstrip("/")
+            for origin in raw_cors_origins.split(",")
+            if origin.strip()
+        ) or ("*",)
+        cors_allow_credentials = "*" not in cors_origins
+        if is_production and not cors_allow_credentials:
+            raise ValueError(
+                "CORS_ORIGINS needs explicit production origins; wildcards "
+                "cannot be used with credential cookies"
+            )
+
+        raw_origins = os.getenv("AUTH_ALLOWED_ORIGINS")
+        if raw_origins is None:
+            raw_origins = raw_cors_origins
         allowed_origins = tuple(
             origin.strip().rstrip("/").lower()
             for origin in raw_origins.split(",")
@@ -65,4 +80,6 @@ class AuthSettings:
             cookie_secure=cookie_secure,
             cookie_samesite=cookie_samesite,
             allowed_origins=allowed_origins,
+            cors_origins=cors_origins,
+            cors_allow_credentials=cors_allow_credentials,
         )

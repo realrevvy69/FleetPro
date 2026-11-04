@@ -36,6 +36,11 @@ class BootstrapCredentials(UsernamePassword):
     password: str = Field(min_length=12, max_length=128)
 
 
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
 def public_user(user: dict) -> dict:
     created_at = user["created_at"]
     if isinstance(created_at, datetime):
