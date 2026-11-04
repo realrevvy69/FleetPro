@@ -73,6 +73,13 @@ html.light .to-\[\#0A0A0A\] { --tw-gradient-to: #FFFFFF var(--tw-gradient-to-pos
 /* Returned protocol card (green-on-dark → green-on-light) */
 html.light .bg-emerald-950\/30 { background-color: rgba(16, 185, 129, 0.08) !important; }
 
+/* Calendar chips/labels: darker tints for contrast on light backgrounds */
+html.light [data-testid="calendar-page"] .text-amber-400 { color: #B45309 !important; }
+html.light [data-testid="calendar-page"] .text-emerald-400 { color: #047857 !important; }
+html.light [data-testid="calendar-page"] .text-blue-400 { color: #1D4ED8 !important; }
+html.light [data-testid="calendar-page"] .text-red-400 { color: #B91C1C !important; }
+
+
 /* Blue glow softened on light */
 html.light .blue-glow { box-shadow: 0 0 12px rgba(37, 99, 235, 0.15); }
 

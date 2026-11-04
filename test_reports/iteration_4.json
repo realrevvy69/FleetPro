@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the Calendar feature end to end: backend CRUD, auto service items, cascade delete, the daily-reminder cron and its cron_runs document, plus the Calendar tab UI (navigation, add/validate/edit/delete, auto badge, German language, light theme, mobile) and a check that the other tabs still load. All 15 backend tests passed and every requested UI flow worked. Found two minor backend validation gaps: impossible dates are accepted, and an invalid last_done_date causes 500 errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/calendar/events", "issue": "The date only has to match the YYYY-MM-DD pattern, so impossible dates like '2026-13-45' are accepted and saved (200). It should be parsed with date.fromisoformat and rejected with 422."},
+      {"endpoint": "GET /api/calendar/events (and /api/maintenance/alerts, the cron and the maintenance loop)", "issue": "POST /api/maintenance/schedules accepts any last_done_date string. One schedule with last_done_date='garbage' makes GET /api/calendar/events return 500 for every range, so the whole Calendar tab breaks and the daily cron fails. /api/maintenance/alerts also returns 500 (this one existed before). Validate last_done_date on create, and/or wrap date.fromisoformat in _calendar_items in a try/except."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Calendar (light theme)", "issues": ["Low contrast in the light theme: the amber 'Service due' chip in the month grid (amber text on a pale amber background) and the 'SERVICE FÄLLIG' label in the day panel are hard to read. Use a darker amber (e.g. amber-700) in light mode."]},
+      {"screen": "EventDialog", "issues": ["The date and time fields use the browser's own input type=date/time pickers instead of the shadcn Calendar/Popover. They show a US format (11/25/2026, 02:30 PM) even when the app language is German."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_calendar.py", "/app/test_reports/pytest/pytest_calendar.xml"],
+  "action_items": [
+    "Validate calendar event dates as real dates (reject e.g. 2026-13-45 with 422)",
+    "Make _calendar_items safe against a malformed last_done_date, or validate last_done_date in MaintenanceScheduleCreate, so one bad schedule cannot cause 500s in the calendar and cron",
+    "Improve contrast of the amber service chip/label in the light theme",
+    "Optional: replace the browser's own date/time inputs with shadcn components or localise them"
+  ],
+  "critical_code_review_comments": [
+    "The frontend works out 'today' and month ranges from the browser's local time, while the backend uses Europe/Berlin. Users in other timezones could see a different 'today' (minor).",
+    "In the cron, if _broadcast_push raises an exception for one item, the cron_runs 'sent' field is never written. Consider try/except per item.",
+    "The calendar components hardcode dark colours (bg-[#141414]). The light theme still renders properly through global overrides."
+  ],
+  "updated_files": ["/app/backend/tests/test_calendar.py"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "Test vehicles (TEST_Cal, TEST_Cas, TEST_Edge, TEST_UI) with schedules and events were created and then deleted through vehicle cascade delete. Test cron_runs documents were deleted by run_id. Nothing is left over, and seed vehicles MB and VW were not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Container date is Nov 4, 2026. Run backend calendar tests with: pytest tests/test_calendar.py -p no:xdist -o addopts=''. The test reads WEBHOOK_CRON_SECRET and MONGO_URL from backend/.env and checks cron_runs.sent. Settings menu testids: settings-menu-trigger, lang-de/lang-en, theme-light/theme-dark."
+}

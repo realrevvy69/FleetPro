@@ -14,7 +14,7 @@ import json
 import asyncio
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Literal, Any, Dict
 import uuid
 from datetime import datetime, timezone, date
@@ -107,6 +107,13 @@ class MaintenanceScheduleCreate(BaseModel):
     interval_value: int
     last_done_mileage: Optional[int] = None
     last_done_date: Optional[str] = None
+
+    @field_validator("last_done_date")
+    @classmethod
+    def _valid_iso(cls, v):
+        if v is not None:
+            datetime.fromisoformat(v)
+        return v
 
 
 class MaintenanceHistory(BaseModel):
@@ -718,6 +725,12 @@ class CalendarEventCreate(BaseModel):
     driver_name: Optional[str] = None
     notes: Optional[str] = None
 
+    @field_validator("date")
+    @classmethod
+    def _real_date(cls, v):
+        date.fromisoformat(v)
+        return v
+
 
 class CalendarEvent(CalendarEventCreate):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -750,7 +763,10 @@ async def _calendar_items(start: date, end: date) -> List[Dict[str, Any]]:
             continue
         due_day = None
         if s["type"] == "monthly" and s.get("last_done_date"):
-            due_day = _add_months(date.fromisoformat(s["last_done_date"][:10]), s["interval_value"])
+            try:
+                due_day = _add_months(date.fromisoformat(s["last_done_date"][:10]), s["interval_value"])
+            except ValueError:
+                continue
         elif s["type"] == "mileage":
             if v.get("mileage", 0) >= (s.get("last_done_mileage") or 0) + s["interval_value"]:
                 due_day = today
@@ -806,11 +822,14 @@ async def _send_daily_reminders(run_id: str):
     for i in items:
         when = f" um {i['time']} Uhr" if i.get("time") else ""
         extra = f" – {i['driver_name']}" if i.get("driver_name") else (f" – {i['notes']}" if i["auto"] and i.get("notes") else "")
-        await _broadcast_push(
-            f"Heute: {EVENT_LABELS_DE[i['type']]}",
-            f"{i['vehicle_label']}{when}{extra}",
-            "/",
-        )
+        try:
+            await _broadcast_push(
+                f"Heute: {EVENT_LABELS_DE[i['type']]}",
+                f"{i['vehicle_label']}{when}{extra}",
+                "/",
+            )
+        except Exception:
+            logging.exception("Daily reminder push failed")
     await db.cron_runs.update_one(
         {"run_id": run_id},
         {"$set": {"date": today.isoformat(), "sent": len(items), "finished_at": now_iso()}},

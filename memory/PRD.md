@@ -31,6 +31,13 @@ Carpool Management App "FleetPro": black UI / white text / blue accents. Dashboa
 - **PWA**: manifest, icons (192/512), service worker (cache-first shell, network-first /api GET, write-queue + replay), `apple-mobile-web-app-*` meta tags, offline read for cached resources, queued writes.
 - **Capacitor scaffold**: `capacitor.config.ts` + `ANDROID_BUILD.md` documenting `yarn build → npx cap add android → cap sync → Android Studio APK`. WebView loads the production preview URL by default; can be flipped to bundled assets by removing the `server.url`.
 
+## v1.4 – Kalender (2026-06)
+- New tab "Kalender" (2nd after Protokolle): month grid (Mon-start) + day panel; manual appointments (handover / return / pool_exit) with vehicle, date, optional time/driver/notes; CRUD via `/api/calendar/events` (collection `calendar_events`).
+- Auto "Service fällig" items from monthly schedules (last_done_date + interval) and overdue mileage schedules (shown on today).
+- Pool exit = reminder only (no status change). Vehicle delete cascades calendar events.
+- Daily push 08:00 Europe/Berlin via platform cron `.emergent/crons.yml` → `POST /api/cron/daily-reminders` (Bearer WEBHOOK_CRON_SECRET, idempotent on run_id in `cron_runs`, work in background task).
+- Date validation hardened (calendar dates, maintenance last_done_date). Tested: iteration_4 (15/15 backend, all UI flows).
+
 ## Tested
 - Backend pytest: 12/12 passing (v1.0 regression + v1.1 drivers, exports, push subscribe/dedupe, public vehicle endpoint).
 - Frontend Playwright: 8/8 v1.1 flows (i18n EN↔DE, drivers CRUD, QR modal, CSV/PDF downloads, handover driver dropdown, mobile route, PWA assets reachable + SW registered).

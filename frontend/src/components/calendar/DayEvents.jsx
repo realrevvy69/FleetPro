@@ -12,7 +12,7 @@ export const DayEvents = ({ day, events, locale, onAdd, onEdit, onDelete }) => {
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">{format(day, "EEEE", { locale })}</div>
-          <div data-testid="calendar-day-title" className="font-heading text-xl font-semibold">{format(day, "d. MMMM yyyy", { locale })}</div>
+          <div data-testid="calendar-day-title" className="font-heading text-xl font-semibold">{format(day, "PPP", { locale })}</div>
         </div>
         <Button size="sm" onClick={onAdd} data-testid="calendar-day-add-btn" className="bg-blue-600 hover:bg-blue-700 text-white h-8">
           <Plus className="w-3.5 h-3.5 mr-1" /> {t("common.add")}
