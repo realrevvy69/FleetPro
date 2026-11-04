@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 9: tested the utilization API, the Dashboard utilization card and the SignaturePad theme switch. Everything passed. Backend: 15/15 new pytest tests passed, and the full suite passed (71). Frontend: Playwright checks of the Dashboard card in DE/EN, light/dark and at 390px wide. Also checked the signature pad pixels across theme toggles, a handover submit, and the tab regression. No page errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard utilization card (light theme)", "issues": ["The amber-400 idle badge and percent text have low contrast on the #FAFAFA card. Consider amber-600 in light mode.", "Future-day cells (bg-white/[0.02]) are almost invisible in light mode. Acceptable, but the strip end is hard to see."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_utilization_it9.py", "/app/backend/tests/ui_seed_it9.py", "/app/test_reports/pytest/pytest_it9.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "UtilizationCard: while loading or on API error, data is null, so the card shows util-empty 'No vehicles yet'. This is misleading. Add separate loading and error states.",
+    "UtilizationCard: the current month and next-button disabling use the browser's local date (new Date()). The backend uses Europe/Berlin. Near midnight on a month boundary, a user outside Berlin could request a 'future' month and get a 400, which shows as empty.",
+    "_trip_ranges loads all handovers on every request (to_list(100000)) without a date filter. Fine for now, but add a created_at filter (or a filter on return >= first) as data grows.",
+    "SignaturePad: strokes are kept only on theme change. A window resize/orientation change does not repaint (pre-existing behaviour, not in scope)."
+  ],
+  "updated_files": ["/app/backend/tests/test_utilization_it9.py", "/app/backend/tests/ui_seed_it9.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "A temporary vehicle TEST_UI9 (TEST-UI9) with protocols TEST_UI9_h1/r1/h2 (an Oct 5-14 trip and an open handover since Nov 2). Also a UI handover protocol, driver TEST_SigDriver. All of it was deleted by id afterwards. Seed vehicles MB Vito and VW T-Roc were not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Utilization endpoint verified: Berlin-day conversion (23:30 UTC -> next day), inclusive ranges, open handover until today, month clipping, overlap de-duplication, sorting, and 400s for abc/2026-13/2026/2026-00/''/future. Missing param gives 422. The UI showed TEST row 3/4 days = 75% (Nov) and 10/31 = 32% (Oct), with idle badges on the 0% vehicles. Next is disabled on the current month. The 390px layout has no overflow (scrollWidth 390). Signature check: sample the canvas with getImageData and take the dominant colour = bg (10,10,10 dark / 255,255,255 light). Strokes are 24,24,27 in light and white in dark, and stay visible after each toggle. Clear after a toggle works, with no ghost strokes after the next toggle. The submit after a toggle returned 200 with signature_base64, and the pads reset. Handover endpoint: POST /api/protocols/handover with signature_base64. Theme via settings-menu-trigger -> theme-light/theme-dark. Run ui_seed_it9.py seed/clean for UI data."
+}

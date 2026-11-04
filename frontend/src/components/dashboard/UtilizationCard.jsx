@@ -8,15 +8,23 @@ import { api } from "../../lib/api";
 import { dateLocale } from "../calendar/eventTypes";
 
 const useUtilization = (month) => {
-  const [data, setData] = useState(null);
+  const [state, setState] = useState({ data: null, status: "loading" });
   useEffect(() => {
     let live = true;
+    setState((s) => ({ ...s, status: "loading" }));
     api.get("/dashboard/utilization", { params: { month: format(month, "yyyy-MM") } })
-      .then((r) => live && setData(r.data))
-      .catch(() => live && setData(null));
+      .then((r) => live && setState({ data: r.data, status: "ok" }))
+      .catch(() => live && setState({ data: null, status: "error" }));
     return () => { live = false; };
   }, [month]);
-  return data;
+  return state;
+};
+
+const UtilBody = ({ data, status, t }) => {
+  if (status === "error") return <div data-testid="util-error" className="p-6 text-center text-sm text-red-400">{t("common.failed")}</div>;
+  if (!data) return <div data-testid="util-loading" className="p-6 text-center text-sm text-zinc-500 animate-pulse">…</div>;
+  if (data.vehicles.length === 0) return <div data-testid="util-empty" className="p-6 text-center text-sm text-zinc-500">{t("dashboard.util_empty")}</div>;
+  return <ul className="divide-y divide-white/5">{data.vehicles.map((r) => <UtilRow key={r.vehicle_id} data={data} row={r} t={t} />)}</ul>;
 };
 
 const DayStrip = ({ data, row }) => {
@@ -28,7 +36,7 @@ const DayStrip = ({ data, row }) => {
         const key = `${data.month}-${String(d).padStart(2, "0")}`;
         const future = d > data.period_days;
         const on = booked.has(key);
-        return <span key={key} title={key} className={`h-4 rounded-[2px] ${on ? "bg-blue-500" : future ? "bg-white/[0.02]" : "bg-white/10"}`} />;
+        return <span key={key} title={key} data-state={on ? "on" : future ? "future" : "off"} className={`util-cell h-4 rounded-[2px] ${on ? "bg-blue-500" : future ? "bg-white/[0.02] border border-dashed border-white/10" : "bg-white/10"}`} />;
       })}
     </div>
   );
@@ -55,7 +63,7 @@ const UtilRow = ({ data, row, t }) => (
 export const UtilizationCard = () => {
   const { t, i18n } = useTranslation();
   const [month, setMonth] = useState(startOfMonth(new Date()));
-  const data = useUtilization(month);
+  const { data, status } = useUtilization(month);
   const atCurrent = isSameMonth(month, new Date());
 
   return (
@@ -77,11 +85,7 @@ export const UtilizationCard = () => {
         </div>
       </div>
       <div className="p-2">
-        {!data || data.vehicles.length === 0 ? (
-          <div data-testid="util-empty" className="p-6 text-center text-sm text-zinc-500">{t("dashboard.util_empty")}</div>
-        ) : (
-          <ul className="divide-y divide-white/5">{data.vehicles.map((r) => <UtilRow key={r.vehicle_id} data={data} row={r} t={t} />)}</ul>
-        )}
+        <UtilBody data={data} status={status} t={t} />
         <p className="px-4 pb-3 pt-1 text-[11px] text-zinc-500">{t("dashboard.util_hint")}</p>
       </div>
     </Card>

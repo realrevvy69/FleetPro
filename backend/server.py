@@ -819,9 +819,10 @@ def _berlin_day(iso: str) -> date:
     return datetime.fromisoformat(iso).astimezone(BERLIN).date()
 
 
-async def _trip_ranges(today: date) -> List[Tuple[str, date, date]]:
+async def _trip_ranges(today: date, last: date) -> List[Tuple[str, date, date]]:
     handovers = await db.protocols.find(
-        {"type": "handover"}, {"_id": 0, "vehicle_id": 1, "created_at": 1, "return_protocol_id": 1}
+        {"type": "handover", "created_at": {"$lt": (last + timedelta(days=2)).isoformat()}},
+        {"_id": 0, "vehicle_id": 1, "created_at": 1, "return_protocol_id": 1},
     ).to_list(100000)
     ret_ids = [h["return_protocol_id"] for h in handovers if h.get("return_protocol_id")]
     returns = {r["id"]: r["created_at"] for r in await db.protocols.find(
@@ -857,7 +858,7 @@ async def dashboard_utilization(month: str):
     last = date(y, m, pycal.monthrange(y, m)[1])
     period_end = min(last, today)
     period = (period_end - first).days + 1
-    booked = _booked_days(await _trip_ranges(today), first, period_end)
+    booked = _booked_days(await _trip_ranges(today, period_end), first, period_end)
     rows = []
     for v in await db.vehicles.find({}, {"_id": 0}).to_list(10000):
         days = sorted(booked.get(v["id"], set()))

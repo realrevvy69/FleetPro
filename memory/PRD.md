@@ -31,6 +31,11 @@ Carpool Management App "FleetPro": black UI / white text / blue accents. Dashboa
 - **PWA**: manifest, icons (192/512), service worker (cache-first shell, network-first /api GET, write-queue + replay), `apple-mobile-web-app-*` meta tags, offline read for cached resources, queued writes.
 - **Capacitor scaffold**: `capacitor.config.ts` + `ANDROID_BUILD.md` documenting `yarn build → npx cap add android → cap sync → Android Studio APK`. WebView loads the production preview URL by default; can be flipped to bundled assets by removing the `server.url`.
 
+## v1.8 – Unterschrift im Theme + Auslastung (2026-06)
+- SignaturePad keeps strokes (strokesRef) and repaints instantly on light/dark switch (MutationObserver on <html> class); signature data re-emitted in new colours.
+- Dashboard "Auslastung pro Fahrzeug": `GET /api/dashboard/utilization?month=YYYY-MM` – actual on-road days from handover→return protocols (Berlin dates, open handovers until today, current month counted up to today), percent, idle < 25 %, sorted least-used first; UtilizationCard with month nav, day strip per vehicle, loading/error states, light-mode contrast.
+- Tested: iteration_9 (backend 15/15 new + regression, frontend 100%); follow-up polish self-verified.
+
 ## v1.7 – Code-Review umgesetzt (2026-06)
 - Security: QR print no longer uses document.write (DOM + textContent; XSS-safe, verified with malicious vehicle name); popup-blocked toast.
 - Hooks: all exhaustive-deps issues fixed (useLatest helper in lib/hooks.js, useCallback loads); no eslint-disable left. Index keys replaced by extra names (adds dedupe).
