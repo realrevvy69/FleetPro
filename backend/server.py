@@ -472,6 +472,10 @@ async def delete_protocol(protocol_id: str):
             {"return_protocol_id": protocol_id},
             {"$set": {"returned": False, "return_protocol_id": None}},
         )
+    removed = [protocol_id] + ([p["return_protocol_id"]] if p.get("type") == "handover" and p.get("return_protocol_id") else [])
+    await db.calendar_events.update_many(
+        {"protocol_id": {"$in": removed}}, {"$set": {"done": False, "protocol_id": None}}
+    )
     return {"ok": True}
 
 

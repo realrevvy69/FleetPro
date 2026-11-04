@@ -17,11 +17,12 @@ const blank = (date) => ({ type: "handover", vehicle_id: "", date, time: "", dri
 export const EventDialog = ({ state, onClose, vehicles, drivers, onSaved }) => {
   const { t } = useTranslation();
   const [form, setForm] = useState(blank(""));
-  const editing = state?.event;
+  const [editing, setEditing] = useState(null);
 
   useEffect(() => {
     if (!state) return;
     const e = state.event;
+    setEditing(e || null);
     setForm(e ? { type: e.type, vehicle_id: e.vehicle_id, date: e.date, time: e.time || "", driver_name: e.driver_name || "", notes: e.notes || "", remind_day_before: e.remind_day_before !== false } : blank(state.date));
   }, [state]);
 

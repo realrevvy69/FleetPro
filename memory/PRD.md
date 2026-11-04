@@ -31,6 +31,13 @@ Carpool Management App "FleetPro": black UI / white text / blue accents. Dashboa
 - **PWA**: manifest, icons (192/512), service worker (cache-first shell, network-first /api GET, write-queue + replay), `apple-mobile-web-app-*` meta tags, offline read for cached resources, queued writes.
 - **Capacitor scaffold**: `capacitor.config.ts` + `ANDROID_BUILD.md` documenting `yarn build → npx cap add android → cap sync → Android Studio APK`. WebView loads the production preview URL by default; can be flipped to bundled assets by removing the `server.url`.
 
+## v1.5 – Kalender-Erweiterungen (2026-06)
+- "Protokoll starten" on handover/return appointments → Protocols tab prefilled (vehicle, driver, notes) / return dialog auto-opens for the open handover; saving marks the appointment done (`calendar_event_id` on protocol create; deleting the protocol resets it).
+- Week view (Mon–Sun, "Ohne Uhrzeit" row + hour slots 07–19, auto-extended) with Month/Week toggle.
+- Double-booking warning (dialog + toast + badges + month-cell triangle), saving still allowed.
+- Per-appointment day-before reminder (default on) via second cron `eve-reminders` 15:00 Europe/Berlin → `POST /api/cron/eve-reminders`; done events never remind.
+- SignaturePad texts translated. Tested: iteration_5 (23/23 backend, all UI flows) + follow-up fixes self-verified.
+
 ## v1.4 – Kalender (2026-06)
 - New tab "Kalender" (2nd after Protokolle): month grid (Mon-start) + day panel; manual appointments (handover / return / pool_exit) with vehicle, date, optional time/driver/notes; CRUD via `/api/calendar/events` (collection `calendar_events`).
 - Auto "Service fällig" items from monthly schedules (last_done_date + interval) and overdue mileage schedules (shown on today).

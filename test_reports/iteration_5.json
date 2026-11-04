@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 5: tested the 4 calendar enhancements end-to-end. Backend: 8 new pytest tests (remind_day_before/done defaults, handover/return calendar_event_id -> done+protocol_id, no-op without id, 400 on on-road vehicle leaves event undone, unknown id ignored, eve-reminders auth/400/202/duplicate + cron_runs {kind:'eve', date: tomorrow, sent} counting only remind=true & not-done, daily skips done with kind:'daily') plus 15 regression tests from test_calendar.py -> 23/23 pass. crons.yml has both entries (0 8 / 0 15 Europe/Berlin). Frontend (Playwright, DE+EN, desktop+mobile): month/week toggle, week grid 7 headers + none row + hour rows dynamically extended 6..21, chips in correct cells, prev/next by week (KW 44/45/46) and month, KW label in German; remind checkbox default checked, uncheck persists false, bell 15:00 tag hidden when off/done; conflict warning amber box lists existing appt, save allowed with warning toast, 'Doppelt belegt' badges + month triangle, edit does not self-warn; start-protocol handover prefill (existing driver matched / custom name input), banner, signature required, done tag after save, on-road error toast; return start-protocol -> history tab + auto-opened return dialog, done after save; no-open-handover error toast; normal handover without calendar has no banner; all tabs navigate. All features work.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/protocols/{id}", "issue": "Deleting a protocol that completed a calendar event does not reset the event (done stays true, protocol_id dangling) -> appointment stays 'Erledigt' with no protocol and no reminders"},
+      {"endpoint": "POST /api/protocols/handover|return", "issue": "calendar_event_id is not validated (vehicle/type mismatch or unknown id silently accepted/ignored). Low risk since only UI sends it"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HandoverForm intent on-road toast", "issue": "Toast 'Fahrzeug ist bereits unterwegs' shown twice (React.StrictMode double-invokes mount effect in dev). Same for 'Keine offene Übergabe' potentially. Use toast id e.g. toast.error(msg, {id:'proto-intent'}) to dedupe", "selector": "[data-sonner-toast]", "priority": "LOW"},
+      {"component": "handover-from-calendar banner", "issue": "Date formatted with browser locale (toLocaleDateString()) -> '11/4/2026' in German UI; should use i18n language (4.11.2026)", "selector": "[data-testid='handover-from-calendar']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Return dialog opened from calendar", "issues": ["No hint/banner that this return will mark the calendar appointment done (handover form has one) - consider consistency"]},
+      {"screen": "EventDialog", "issues": ["During close animation of edit dialog, title briefly flips to 'Termin hinzufügen' (state nulled before animation ends)", "Date/time use native browser pickers (US format 11/04/2026 in German UI) instead of shadcn calendar"]},
+      {"screen": "SignaturePad", "issues": ["'SIGN HERE' / 'Clear' not translated in German UI (pre-existing)"]},
+      {"screen": "Calendar mobile 390px", "issues": ["Header controls wrap so prev and next arrows are split across two lines around the label"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_calendar_protocols.py", "/app/backend/tests/test_calendar.py", "/app/backend/tests/ui_seed_it5.py", "/app/test_reports/pytest/pytest_results_it5.xml"],
+  "action_items": [
+    "Optional: on protocol delete, reset linked calendar_events (done=false, protocol_id=null) where protocol_id matches",
+    "Optional: dedupe intent toasts with a toast id",
+    "Optional: format handover-from-calendar date with i18n language"
+  ],
+  "critical_code_review_comments": [
+    "server.py ~919 lines and ProtocolsTab.jsx ~730 lines exceed 700-line guideline; consider splitting (calendar router module; HistoryList/ReturnDialog into own files)",
+    "WeekGrid defines Cell component inside render -> remounts all cells every render; make it a top-level component",
+    "useClashes fetches on every vehicle/date change without debounce - fine for now",
+    "Conflict detection counts done events too (a completed handover + a new appointment same day still flagged) - acceptable but consider excluding done"
+  ],
+  "updated_files": ["/app/backend/tests/test_calendar_protocols.py", "/app/backend/tests/ui_seed_it5.py"],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "Created TEST_Alpha/Beta/Gamma vehicles, TEST_Anna driver, calendar events and protocols for UI tests; all cleaned up via ui_seed_it5.py cleanup (vehicle delete cascades events, handover delete removes returns). Backend tests clean up their own data and cron_runs docs.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Container date 2026-11-04. Language stored in localStorage 'fleetpro_lang' (default en). Seed helper: python /app/backend/tests/ui_seed_it5.py (writes /tmp/it5_seed.json) and 'cleanup' arg. Signature pads: [data-testid=driver-signature-pad] canvas / return-signature-pad canvas, draw with mouse. Event type 'service' is not allowed for manual events (only handover/return/pool_exit)."
+}

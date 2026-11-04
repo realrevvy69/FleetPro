@@ -26,7 +26,9 @@
     "unknown": "Unbekannt",
     "none": "Keine",
     "yes": "Ja",
-    "no": "Nein"
+    "no": "Nein",
+    "sign_here": "Hier unterschreiben",
+    "clear": "Löschen"
   },
   "tabs": {
     "dashboard": "Dashboard",
@@ -283,6 +285,7 @@
     "saved_with_conflict": "Gespeichert – Achtung, Fahrzeug ist an diesem Tag doppelt eingeplant",
     "no_open_handover": "Keine offene Übergabe für dieses Fahrzeug gefunden",
     "vehicle_on_road": "Fahrzeug ist bereits unterwegs – bitte zuerst die Rückgabe erfassen",
-    "from_calendar": "Aus Kalendertermin vom {{date}} – wird nach dem Speichern als erledigt markiert"
+    "from_calendar": "Aus Kalendertermin vom {{date}} – wird nach dem Speichern als erledigt markiert",
+    "return_from_calendar": "Aus Kalendertermin – wird nach dem Speichern als erledigt markiert"
   }
 }

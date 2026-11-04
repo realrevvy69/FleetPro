@@ -65,9 +65,11 @@ export const CalendarTab = ({ vehicles, drivers, onStartProtocol }) => {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <ViewToggle view={view} setView={setView} t={t} />
-          <Button variant="outline" size="icon" onClick={() => go(-1)} data-testid="calendar-prev-month" className="bg-transparent border-white/10 h-9 w-9"><ChevronLeft className="w-4 h-4" /></Button>
-          <div data-testid="calendar-month-label" className="font-heading font-semibold min-w-[150px] text-center capitalize text-sm md:text-base">{label}</div>
-          <Button variant="outline" size="icon" onClick={() => go(1)} data-testid="calendar-next-month" className="bg-transparent border-white/10 h-9 w-9"><ChevronRight className="w-4 h-4" /></Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => go(-1)} data-testid="calendar-prev-month" className="bg-transparent border-white/10 h-9 w-9"><ChevronLeft className="w-4 h-4" /></Button>
+            <div data-testid="calendar-month-label" className="font-heading font-semibold min-w-[150px] text-center capitalize text-sm md:text-base">{label}</div>
+            <Button variant="outline" size="icon" onClick={() => go(1)} data-testid="calendar-next-month" className="bg-transparent border-white/10 h-9 w-9"><ChevronRight className="w-4 h-4" /></Button>
+          </div>
           <Button variant="outline" onClick={goToday} data-testid="calendar-today-btn" className="bg-transparent border-white/10 h-9">{t("calendar.today")}</Button>
           <Button onClick={() => setDialog({ date: ymd(selected) })} data-testid="add-calendar-event-btn" className="bg-blue-600 hover:bg-blue-700 text-white blue-glow border border-blue-500/50 h-9">
             <Plus className="w-4 h-4 mr-2" /> {t("calendar.add_event")}

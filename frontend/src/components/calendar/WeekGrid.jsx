@@ -5,6 +5,17 @@ import { EventChip } from "./EventChip";
 
 const hourOf = (e) => Number(e.time.slice(0, 2));
 
+const Cell = ({ d, h, active, list, onSelect }) => (
+  <button
+    type="button"
+    onClick={() => onSelect(d)}
+    data-testid={`week-cell-${format(d, "yyyy-MM-dd")}-${h === null ? "none" : h}`}
+    className={`min-h-[36px] p-1 border-b border-r border-white/5 flex flex-col gap-0.5 text-left transition-colors ${active ? "bg-blue-600/10" : "hover:bg-white/5"}`}
+  >
+    {list.map((e) => <EventChip key={e.id} e={e} showTime={h !== null} />)}
+  </button>
+);
+
 export const WeekGrid = ({ range, selected, onSelect, events, locale }) => {
   const { t } = useTranslation();
   const days = eachDayOfInterval(range);
@@ -13,17 +24,9 @@ export const WeekGrid = ({ range, selected, onSelect, events, locale }) => {
   const to = Math.max(19, ...timed);
   const hours = Array.from({ length: to - from + 1 }, (_, i) => from + i);
   const cellEvents = (d, h) => events.filter((e) => e.date === format(d, "yyyy-MM-dd") && (h === null ? !e.time : e.time && hourOf(e) === h));
-
-  const Cell = ({ d, h }) => (
-    <button
-      type="button"
-      onClick={() => onSelect(d)}
-      data-testid={`week-cell-${format(d, "yyyy-MM-dd")}-${h === null ? "none" : h}`}
-      className={`min-h-[36px] p-1 border-b border-r border-white/5 flex flex-col gap-0.5 text-left transition-colors ${isSameDay(d, selected) ? "bg-blue-600/10" : "hover:bg-white/5"}`}
-    >
-      {cellEvents(d, h).map((e) => <EventChip key={e.id} e={e} showTime={h !== null} />)}
-    </button>
-  );
+  const row = (h) => days.map((d) => (
+    <Cell key={`${h}-${d.toISOString()}`} d={d} h={h} active={isSameDay(d, selected)} list={cellEvents(d, h)} onSelect={onSelect} />
+  ));
 
   return (
     <div data-testid="calendar-week-grid" className="bg-[#141414] border border-white/10 rounded-lg overflow-x-auto">
@@ -37,11 +40,11 @@ export const WeekGrid = ({ range, selected, onSelect, events, locale }) => {
           </button>
         ))}
         <div className="text-[9px] uppercase tracking-wider text-zinc-500 p-1 border-b border-r border-white/10 flex items-center">{t("calendar.all_day")}</div>
-        {days.map((d) => <Cell key={`n-${d.toISOString()}`} d={d} h={null} />)}
+        {row(null)}
         {hours.map((h) => (
           <React.Fragment key={h}>
             <div className="text-[10px] font-mono text-zinc-500 p-1 border-b border-r border-white/10">{String(h).padStart(2, "0")}:00</div>
-            {days.map((d) => <Cell key={`${h}-${d.toISOString()}`} d={d} h={h} />)}
+            {row(h)}
           </React.Fragment>
         ))}
       </div>

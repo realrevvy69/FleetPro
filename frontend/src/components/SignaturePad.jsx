@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Eraser } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export const SignaturePad = ({ onChange, testId = "signature-pad" }) => {
+  const { t } = useTranslation();
   const canvasRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
@@ -86,7 +88,7 @@ export const SignaturePad = ({ onChange, testId = "signature-pad" }) => {
         />
         {!hasSignature && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-zinc-600 text-xs uppercase tracking-[0.3em]">
-            Sign here
+            {t("common.sign_here")}
           </div>
         )}
       </div>
@@ -99,7 +101,7 @@ export const SignaturePad = ({ onChange, testId = "signature-pad" }) => {
           data-testid="signature-clear-btn"
           className="text-zinc-400 hover:text-white"
         >
-          <Eraser className="w-3.5 h-3.5 mr-1.5" /> Clear
+          <Eraser className="w-3.5 h-3.5 mr-1.5" /> {t("common.clear")}
         </Button>
       </div>
     </div>

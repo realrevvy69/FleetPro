@@ -26,7 +26,9 @@
     "unknown": "Unknown",
     "none": "None",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "sign_here": "Sign here",
+    "clear": "Clear"
   },
   "tabs": {
     "dashboard": "Dashboard",
@@ -283,6 +285,7 @@
     "saved_with_conflict": "Saved – note: vehicle is double-booked on this day",
     "no_open_handover": "No open handover found for this vehicle",
     "vehicle_on_road": "Vehicle is already on the road – record the return first",
-    "from_calendar": "From calendar appointment on {{date}} – will be marked done after saving"
+    "from_calendar": "From calendar appointment on {{date}} – will be marked done after saving",
+    "return_from_calendar": "From calendar appointment – will be marked done after saving"
   }
 }

@@ -88,13 +88,13 @@ const prefillForm = (intent, drivers) => {
 };
 
 const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [form, setForm] = useState(() => prefillForm(intent, drivers));
   const [linkedDamages, setLinkedDamages] = useState([]);
   const available = vehicles.filter((v) => v.status !== "on_road");
 
   useEffect(() => {
-    if (intent && vehicles.find((v) => v.id === intent.vehicle_id)?.status === "on_road") toast.error(t("calendar.vehicle_on_road"));
+    if (intent && vehicles.find((v) => v.id === intent.vehicle_id)?.status === "on_road") toast.error(t("calendar.vehicle_on_road"), { id: "proto-intent" });
     // eslint-disable-next-line
   }, []);
 
@@ -171,7 +171,7 @@ const HandoverForm = ({ vehicles, drivers, intent, onSubmitted }) => {
         </div>
         {form.calendar_event_id && (
           <div data-testid="handover-from-calendar" className="rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs text-blue-400">
-            {t("calendar.from_calendar", { date: new Date(`${form.calendar_date}T00:00`).toLocaleDateString() })}
+            {t("calendar.from_calendar", { date: new Date(`${form.calendar_date}T00:00`).toLocaleDateString(i18n.language) })}
           </div>
         )}
 
@@ -358,7 +358,7 @@ const HistoryList = ({ protocols, vehicles, loaded, intent, onChanged }) => {
     if (!intent || !loaded) return;
     const open = protocols.find((p) => p.vehicle_id === intent.vehicle_id && !p.returned);
     if (open) openReturn(open, intent.id);
-    else toast.error(t("calendar.no_open_handover"));
+    else toast.error(t("calendar.no_open_handover"), { id: "proto-intent" });
     // eslint-disable-next-line
   }, [loaded]);
 
@@ -453,6 +453,11 @@ const HistoryList = ({ protocols, vehicles, loaded, intent, onChanged }) => {
             <DialogTitle className="font-heading">{t("protocols.return_title")}</DialogTitle>
             <DialogDescription className="text-zinc-500">{t("protocols.return_description")}</DialogDescription>
           </DialogHeader>
+          {retEventId && (
+            <div data-testid="return-from-calendar" className="rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs text-blue-400">
+              {t("calendar.return_from_calendar")}
+            </div>
+          )}
           {returning && (
             <div className="grid gap-4">
               <Field label={t("protocols.driver_name")}><Input data-testid="return-driver-input" value={retForm.driver_name} onChange={(e) => setRetForm({ ...retForm, driver_name: e.target.value })} className="bg-[#0A0A0A] border-white/10" /></Field>
